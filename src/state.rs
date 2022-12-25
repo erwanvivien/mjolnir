@@ -1,4 +1,3 @@
-use log::debug;
 use winit::{event::WindowEvent, window::Window};
 
 pub struct State {
@@ -87,16 +86,12 @@ impl State {
 
     pub fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
-            WindowEvent::CursorMoved {
-                device_id,
-                position,
-                ..
-            } => {
+            WindowEvent::CursorMoved { position, .. } => {
                 #[cfg(debug_assertions)]
-                debug!(
-                    "CursorMoved {{ device_id: {:?}, position: {:?} }}",
-                    device_id, position,
-                );
+                {
+                    use log::debug;
+                    debug!("CursorMoved {{ position: {:?} }}", position);
+                }
 
                 self.clear_color = wgpu::Color {
                     r: position.x as f64 / self.size.width as f64,

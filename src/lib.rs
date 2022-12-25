@@ -1,4 +1,4 @@
-use log::{info, LevelFilter};
+use log::info;
 use state::State;
 use winit::{
     event::*,
@@ -22,6 +22,7 @@ pub fn init_logs() {
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
+        use log::LevelFilter;
         let level = LevelFilter::Info;
         env_logger::builder().filter_level(level).init();
     }
