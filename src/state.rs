@@ -2,7 +2,7 @@ use wgpu::util::DeviceExt;
 use winit::{event::WindowEvent, window::Window};
 
 use crate::{
-    camera::{Camera, CameraUniform},
+    camera::{Camera, CameraController, CameraUniform},
     texture::Texture,
 };
 
@@ -74,6 +74,7 @@ pub struct State {
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+    camera_controller: CameraController,
 
     // Clear color
     clear_color: wgpu::Color,
@@ -183,6 +184,7 @@ impl State {
             target: (0.0, 0.0, 0.0).into(),
             // which way is "up"
             up: cgmath::Vector3::unit_y(),
+            forward: cgmath::Vector3::unit_z(),
             aspect: config.width as f32 / config.height as f32,
             fovy: 45.0,
             znear: 0.1,
@@ -191,6 +193,8 @@ impl State {
 
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_view_proj(&camera);
+
+        let camera_controller = CameraController::new(0.2);
 
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera Buffer"),
@@ -302,6 +306,7 @@ impl State {
             camera_uniform,
             camera_buffer,
             camera_bind_group,
+            camera_controller,
 
             clear_color: wgpu::Color {
                 r: 0.1,
@@ -324,6 +329,10 @@ impl State {
     }
 
     pub fn input(&mut self, event: &WindowEvent) -> bool {
+        if self.camera_controller.process_events(event) {
+            return true;
+        }
+
         match event {
             WindowEvent::CursorMoved { position, .. } => {
                 #[cfg(debug_assertions)]
@@ -346,7 +355,15 @@ impl State {
         }
     }
 
-    pub(crate) fn update(&mut self) {}
+    pub(crate) fn update(&mut self) {
+        self.camera_controller.update_camera(&mut self.camera);
+        self.camera_uniform.update_view_proj(&self.camera);
+        self.queue.write_buffer(
+            &self.camera_buffer,
+            0,
+            bytemuck::cast_slice(&[self.camera_uniform]),
+        );
+    }
 
     pub(crate) fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
