@@ -7,6 +7,7 @@ use winit::{
 };
 
 mod camera;
+mod instance;
 mod state;
 mod texture;
 
