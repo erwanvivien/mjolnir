@@ -32,8 +32,6 @@ pub async fn load_string(file_name: &Path) -> anyhow::Result<String> {
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn load_string(file_name: &Path) -> anyhow::Result<String> {
     let path = std::path::Path::new(FILE).join("res").join(file_name);
-
-    dbg!(&path);
     let txt = std::fs::read_to_string(&path)?;
 
     Ok(txt)
