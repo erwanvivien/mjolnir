@@ -5,6 +5,7 @@ use wgpu::util::DeviceExt;
 
 use crate::{model, texture};
 
+#[cfg(not(target_arch = "wasm32"))]
 const FILE: &'static str = concat!(env!("CARGO_MANIFEST_DIR"));
 
 #[cfg(target_arch = "wasm32")]
