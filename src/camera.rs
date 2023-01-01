@@ -3,7 +3,6 @@ use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
 pub struct Camera {
     pub(crate) eye: cgmath::Point3<f32>,
     pub(crate) target: cgmath::Point3<f32>,
-    pub(crate) forward: cgmath::Vector3<f32>,
     pub(crate) up: cgmath::Vector3<f32>,
     pub(crate) aspect: f32,
     pub(crate) fovy: f32,

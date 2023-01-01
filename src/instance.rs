@@ -1,5 +1,3 @@
-use cgmath::prelude::*;
-
 pub struct Instance {
     pub(crate) position: cgmath::Vector3<f32>,
     pub(crate) rotation: cgmath::Quaternion<f32>,
