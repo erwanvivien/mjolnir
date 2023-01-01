@@ -8,7 +8,7 @@ use crate::{model, texture};
 const FILE: &'static str = concat!(env!("CARGO_MANIFEST_DIR"));
 
 #[cfg(target_arch = "wasm32")]
-fn format_url(file_name: &str) -> reqwest::Url {
+fn format_url(file_name: &Path) -> reqwest::Url {
     let window = web_sys::window().unwrap();
     let location = window.location();
     let base = reqwest::Url::parse(&format!(
@@ -18,12 +18,12 @@ fn format_url(file_name: &str) -> reqwest::Url {
     ))
     .unwrap();
 
-    base.join(file_name).unwrap()
+    base.join(&file_name.display().to_string()).unwrap()
 }
 
 #[cfg(target_arch = "wasm32")]
 pub async fn load_string(file_name: &Path) -> anyhow::Result<String> {
-    let url = format_url(&file_name.display().to_string());
+    let url = format_url(file_name);
     let txt = reqwest::get(url).await?.text().await?;
 
     Ok(txt)
@@ -41,7 +41,7 @@ pub async fn load_string(file_name: &Path) -> anyhow::Result<String> {
 
 #[cfg(target_arch = "wasm32")]
 pub async fn load_binary(file_name: &Path) -> anyhow::Result<Vec<u8>> {
-    let url = format_url(&file_name.display().to_string());
+    let url = format_url(file_name);
     let data = reqwest::get(url).await?.bytes().await?.to_vec();
 
     Ok(data)
