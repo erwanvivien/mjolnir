@@ -120,7 +120,7 @@ impl CameraController {
             camera.eye -= forward_norm * self.speed;
         }
 
-        let right = forward_norm.cross(camera.up);
+        let right = camera.up.cross(forward_norm);
 
         // Redo radius calc in case the fowrard/backward is pressed.
         let forward = camera.target - camera.eye;
