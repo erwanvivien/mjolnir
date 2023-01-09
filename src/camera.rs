@@ -1,4 +1,8 @@
-use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
+#[cfg(target_arch = "wasm")]
+use winit::event::ScanCode;
+#[cfg(not(target_arch = "wasm"))]
+use winit::event::VirtualKeyCode;
+use winit::event::{ElementState, KeyboardInput, WindowEvent};
 
 pub struct Camera {
     pub(crate) eye: cgmath::Point3<f32>,
@@ -75,31 +79,69 @@ impl CameraController {
                 input:
                     KeyboardInput {
                         state,
-                        virtual_keycode: Some(keycode),
+                        #[cfg(target_arch = "wasm")]
+                        scancode,
+                        #[cfg(not(target_arch = "wasm"))]
+                        virtual_keycode,
                         ..
                     },
                 ..
             } => {
                 let is_pressed = *state == ElementState::Pressed;
-                match keycode {
-                    VirtualKeyCode::Z | VirtualKeyCode::Up => {
+                let mut res = false;
+
+                // Web
+                #[cfg(target_arch = "wasm")]
+                {
+                    log::info!("Current scancode is: {}", &scancode);
+                    // 'Z'
+                    if scancode == &0x5A {
                         self.is_forward_pressed = is_pressed;
-                        true
+                        res = true;
                     }
-                    VirtualKeyCode::Q | VirtualKeyCode::Left => {
+                    // 'Q'
+                    if scancode == &0x51 {
                         self.is_left_pressed = is_pressed;
-                        true
+                        res = true;
                     }
-                    VirtualKeyCode::S | VirtualKeyCode::Down => {
+                    // 'S'
+                    if scancode == &0x53 {
                         self.is_backward_pressed = is_pressed;
-                        true
+                        res = true;
                     }
-                    VirtualKeyCode::D | VirtualKeyCode::Right => {
+                    // 'D'
+                    if scancode == &0x44 {
                         self.is_right_pressed = is_pressed;
-                        true
+                        res = true;
                     }
-                    _ => false,
                 }
+                #[cfg(not(target_arch = "wasm"))]
+                {
+                    if virtual_keycode.is_none() {
+                        return false;
+                    }
+                    let key = virtual_keycode.unwrap();
+                    log::info!("Current key is: {:?}", &key);
+
+                    if key == VirtualKeyCode::Z || key == VirtualKeyCode::Up {
+                        self.is_forward_pressed = is_pressed;
+                        res = true;
+                    }
+                    if key == VirtualKeyCode::Q || key == VirtualKeyCode::Left {
+                        self.is_left_pressed = is_pressed;
+                        res = true;
+                    }
+                    if key == VirtualKeyCode::S || key == VirtualKeyCode::Back {
+                        self.is_backward_pressed = is_pressed;
+                        res = true;
+                    }
+                    if key == VirtualKeyCode::D || key == VirtualKeyCode::Right {
+                        self.is_right_pressed = is_pressed;
+                        res = true;
+                    }
+                }
+
+                res
             }
             _ => false,
         }
