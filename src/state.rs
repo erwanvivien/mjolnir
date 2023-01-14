@@ -23,6 +23,7 @@ pub struct State {
     obj_model: model::Model,
 
     diffuse_bind_group: wgpu::BindGroup,
+    #[allow(dead_code)]
     diffuse_texture: Texture,
     depth_texture: Texture,
 
