@@ -13,8 +13,7 @@ npx serve
 cargo watch -- wasm-pack build --target web --dev --out-dir game
 
 # Terminal 2
-cd game
-npx serve
+npx serve game
 ```
 
 _Note: index.html can be found here: [sotrh#wasm-example](https://sotrh.github.io/learn-wgpu/beginner/tutorial1-window/#wasm-example)_
