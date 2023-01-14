@@ -1,5 +1,3 @@
 /target
 pkg
-
-# npm
-node_modules
+game
