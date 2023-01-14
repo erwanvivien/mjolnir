@@ -120,8 +120,6 @@ pub async fn load_model(
         })
     }
 
-    dbg!(&file_name);
-
     let meshes = models
         .into_iter()
         .map(|m| {
