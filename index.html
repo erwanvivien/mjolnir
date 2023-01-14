@@ -12,12 +12,40 @@
     </style>
   </head>
 
-  <body id="wasm-example">
+  <body id="wasm-example" style="display: flex; flex-direction: column">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+      const socket = io();
+
+      let last_update = null;
+      const updateTime = (date) => {
+        const date_str = new Date(date.getTime() + 3600000).toISOString();
+        last_update.innerHTML = date_str;
+      };
+
+      setTimeout(() => {
+        last_update = document.getElementById("last_update");
+        updateTime(new Date());
+      }, 1000);
+
+      setInterval(() => {
+        socket.emit("refresh", {});
+      }, 1000);
+
+      socket.emit("init", {});
+      socket.on("update", (data) => {
+        // Refresh page
+        window.location.reload();
+        updateTime(data);
+      });
+    </script>
+
     <script type="module">
       import init from "./pkg/mjolnir.js";
       init().then(() => {
         console.log("WASM Loaded");
       });
     </script>
+    <div id="last_update" style="padding-bottom: 2em"></div>
   </body>
 </html>
