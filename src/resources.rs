@@ -22,36 +22,39 @@ fn format_url(file_name: &Path) -> reqwest::Url {
     base.join(&file_name.display().to_string()).unwrap()
 }
 
-#[cfg(target_arch = "wasm32")]
 pub async fn load_string(file_name: &Path) -> anyhow::Result<String> {
-    let url = format_url(file_name);
-    let txt = reqwest::get(url).await?.text().await?;
+    #[cfg(target_arch = "wasm32")]
+    {
+        let url = format_url(file_name);
+        let txt = reqwest::get(url).await?.text().await?;
 
-    Ok(txt)
+        Ok(txt)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let path = std::path::Path::new(FILE).join("res").join(file_name);
+        let txt = std::fs::read_to_string(&path)?;
+
+        Ok(txt)
+    }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-pub async fn load_string(file_name: &Path) -> anyhow::Result<String> {
-    let path = std::path::Path::new(FILE).join("res").join(file_name);
-    let txt = std::fs::read_to_string(&path)?;
-
-    Ok(txt)
-}
-
-#[cfg(target_arch = "wasm32")]
 pub async fn load_binary(file_name: &Path) -> anyhow::Result<Vec<u8>> {
-    let url = format_url(file_name);
-    let data = reqwest::get(url).await?.bytes().await?.to_vec();
+    #[cfg(target_arch = "wasm32")]
+    {
+        let url = format_url(file_name);
+        let data = reqwest::get(url).await?.bytes().await?.to_vec();
 
-    Ok(data)
-}
+        Ok(data)
+    }
 
-#[cfg(not(target_arch = "wasm32"))]
-pub async fn load_binary(file_name: &Path) -> anyhow::Result<Vec<u8>> {
-    let path = std::path::Path::new(FILE).join("res").join(file_name);
-    let data = std::fs::read(path)?;
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let path = std::path::Path::new(FILE).join("res").join(file_name);
+        let data = std::fs::read(path)?;
 
-    Ok(data)
+        Ok(data)
+    }
 }
 
 pub async fn load_texture(
