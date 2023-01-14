@@ -1,8 +1,11 @@
 use wgpu::util::DeviceExt;
-use winit::{event::WindowEvent, window::Window};
+use winit::{
+    event::{ElementState, KeyboardInput, MouseButton, WindowEvent},
+    window::Window,
+};
 
 use crate::{
-    camera::{Camera, CameraController, CameraUniform},
+    camera::{Camera, CameraController, CameraUniform, Projection},
     instance::{Instance, InstanceRaw},
     model::{self, Vertex},
     resources,
@@ -24,13 +27,16 @@ pub struct State {
     depth_texture: Texture,
 
     camera: Camera,
+    projection: Projection,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
-    camera_controller: CameraController,
+    pub(crate) camera_controller: CameraController,
 
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
+
+    pub(crate) mouse_pressed: bool,
 
     // Clear color
     clear_color: wgpu::Color,
@@ -141,24 +147,17 @@ impl State {
             source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/test.wgsl").into()),
         });
 
-        let camera = Camera {
-            // position the camera one unit up and 2 units back
-            // +z is out of the screen
-            eye: (0.0, 1.0, 2.0).into(),
-            // have it look at the origin
-            target: (0.0, 0.0, 0.0).into(),
-            // which way is "up"
-            up: cgmath::Vector3::unit_y(),
-            aspect: config.width as f32 / config.height as f32,
-            fovy: 45.0,
-            znear: 0.1,
-            zfar: 100.0,
-        };
+        let camera = Camera::new(
+            (0f32, 5f32, 10f32),
+            cgmath::Deg(-90f32),
+            cgmath::Deg(-20f32),
+        );
+        let projection =
+            Projection::new(config.width, config.height, cgmath::Deg(45.0), 0.1, 100.0);
+        let camera_controller = CameraController::new(4.0, 0.4);
 
         let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera);
-
-        let camera_controller = CameraController::new(0.2);
+        camera_uniform.update_view_proj(&camera, &projection);
 
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera Buffer"),
@@ -297,6 +296,7 @@ impl State {
             depth_texture,
 
             camera,
+            projection,
             camera_uniform,
             camera_buffer,
             camera_bind_group,
@@ -304,6 +304,8 @@ impl State {
 
             instances,
             instance_buffer,
+
+            mouse_pressed: false,
 
             clear_color: wgpu::Color {
                 r: 0.1,
@@ -324,40 +326,43 @@ impl State {
         self.config.height = new_size.height;
         self.surface.configure(&self.device, &self.config);
 
+        self.projection.resize(new_size.width, new_size.height);
+
         self.depth_texture =
             texture::Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
     }
 
     pub fn input(&mut self, event: &WindowEvent) -> bool {
-        if self.camera_controller.process_events(event) {
-            return true;
-        }
-
         match event {
-            WindowEvent::CursorMoved { position, .. } => {
-                #[cfg(debug_assertions)]
-                {
-                    use log::debug;
-                    debug!("CursorMoved {{ position: {:?} }}", position);
-                }
-
-                self.clear_color = wgpu::Color {
-                    r: position.x as f64 / self.size.width as f64,
-                    g: position.y as f64 / self.size.height as f64,
-                    b: 0.3,
-                    a: 1.0,
-                };
-
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        virtual_keycode: Some(key),
+                        state,
+                        ..
+                    },
+                ..
+            } => self.camera_controller.process_keyboard(key, state),
+            WindowEvent::MouseWheel { delta, .. } => {
+                self.camera_controller.process_scroll(delta);
                 true
             }
-
+            WindowEvent::MouseInput {
+                button: MouseButton::Left,
+                state,
+                ..
+            } => {
+                self.mouse_pressed = *state == ElementState::Pressed;
+                true
+            }
             _ => false,
         }
     }
 
-    pub(crate) fn update(&mut self) {
-        self.camera_controller.update_camera(&mut self.camera);
-        self.camera_uniform.update_view_proj(&self.camera);
+    pub(crate) fn update(&mut self, dt: instant::Duration) {
+        self.camera_controller.update_camera(&mut self.camera, dt);
+        self.camera_uniform
+            .update_view_proj(&self.camera, &self.projection);
         self.queue.write_buffer(
             &self.camera_buffer,
             0,

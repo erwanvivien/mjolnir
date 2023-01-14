@@ -1045,6 +1045,7 @@ dependencies = [
  "console_log",
  "env_logger",
  "image",
+ "instant",
  "log",
  "pollster",
  "reqwest",

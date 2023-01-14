@@ -2,6 +2,9 @@
 name = "mjolnir"
 version = "0.1.0"
 edition = "2021"
+description = "A simple 3D engine written in Rust for the web"
+repository = "https://github.com/erwanvivien/mjolnir"
+license = ""
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -23,6 +26,7 @@ image = { version = "0.24", default-features = false, features = [
 anyhow = "1.0"
 cgmath = "0.18"
 tobj = { version = "3.2.1", features = ["async"] }
+instant = "0.1"
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -38,3 +42,6 @@ web-sys = { version = "0.3", features = [
     "Location",
 ] }
 reqwest = { version = "0.11" }
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
