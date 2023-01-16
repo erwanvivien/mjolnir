@@ -27,9 +27,11 @@ pub fn init_logs() {
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        use log::LevelFilter;
-        let level = LevelFilter::Info;
-        env_logger::builder().filter_level(level).init();
+        use log::LevelFilter::*;
+        env_logger::builder()
+            .filter_module("mjolnir", Info)
+            .filter_module("wgpu_core", Warn)
+            .init();
     }
 }
 
