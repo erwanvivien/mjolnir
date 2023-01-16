@@ -12,12 +12,7 @@ const FILE: &'static str = concat!(env!("CARGO_MANIFEST_DIR"));
 fn format_url(file_name: &Path) -> reqwest::Url {
     let window = web_sys::window().unwrap();
     let location = window.location();
-    let base = reqwest::Url::parse(&format!(
-        "{}/{}/",
-        location.origin().unwrap(),
-        option_env!("RES_PATH").unwrap_or("res"),
-    ))
-    .unwrap();
+    let base = reqwest::Url::parse(&format!("{}/", location.origin().unwrap())).unwrap();
 
     base.join(&file_name.display().to_string()).unwrap()
 }
@@ -32,10 +27,7 @@ pub async fn load_string(file_name: &Path) -> anyhow::Result<String> {
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let path = std::path::Path::new(FILE).join("res").join(file_name);
-        let txt = std::fs::read_to_string(&path)?;
-
-        Ok(txt)
+        Ok(std::fs::read_to_string(&file_name)?)
     }
 }
 
@@ -50,10 +42,7 @@ pub async fn load_binary(file_name: &Path) -> anyhow::Result<Vec<u8>> {
 
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let path = std::path::Path::new(FILE).join("res").join(file_name);
-        let data = std::fs::read(path)?;
-
-        Ok(data)
+        Ok(std::fs::read(&file_name)?)
     }
 }
 
@@ -72,8 +61,13 @@ pub async fn load_model(
     queue: &wgpu::Queue,
     layout: &wgpu::BindGroupLayout,
 ) -> anyhow::Result<model::Model> {
+    #[cfg(not(target_arch = "wasm32"))]
+    let file_name = std::path::Path::new(FILE).join("res").join(file_name);
+    #[cfg(target_arch = "wasm32")]
+    let file_name = std::path::Path::new("res").join(file_name);
     if file_name.extension() == Some("obj".as_ref()) {
-        load_model_obj(file_name, device, queue, layout).await
+        log::error!("Loading model: {}", file_name.display());
+        load_model_obj(&file_name, device, queue, layout).await
     } else {
         Err(anyhow::anyhow!("Unsupported model format"))
     }
