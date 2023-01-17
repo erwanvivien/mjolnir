@@ -32,6 +32,7 @@ impl Instant {
         Self::now().duration_since(*self)
     }
 
+    #[allow(dead_code)]
     pub fn checked_add(&self, duration: Duration) -> Option<Self> {
         match duration.as_micros().try_into() {
             Ok(duration) => self.0.checked_add(duration).map(|i| Self(i)),
@@ -39,6 +40,7 @@ impl Instant {
         }
     }
 
+    #[allow(dead_code)]
     pub fn checked_sub(&self, duration: Duration) -> Option<Self> {
         match duration.as_micros().try_into() {
             Ok(duration) => self.0.checked_sub(duration).map(|i| Self(i)),
