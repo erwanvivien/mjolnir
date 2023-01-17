@@ -1,4 +1,4 @@
-use std::{iter, path::Path, time::Instant};
+use std::{iter, path::Path};
 
 use cgmath::prelude::*;
 use context::GraphicsContext;
@@ -37,6 +37,56 @@ use crate::{
     window::WindowEvents,
 };
 use model::{DrawLight, DrawModel, Vertex};
+
+use std::ops::{Add, AddAssign, Sub, SubAssign};
+pub use std::time::Duration;
+/// INSTANT
+#[cfg(not(target_arch = "wasm32"))]
+pub use std::time::Instant;
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(inline_js = r#"
+export function performance_now() {
+  return performance.now();
+}"#)]
+extern "C" {
+    fn performance_now() -> f64;
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Instant(u64);
+
+#[cfg(target_arch = "wasm32")]
+impl Instant {
+    pub fn now() -> Self {
+        Self((performance_now() * 1000.0) as u64)
+    }
+
+    pub fn duration_since(&self, earlier: Instant) -> Duration {
+        Duration::from_micros(self.0 - earlier.0)
+    }
+
+    pub fn elapsed(&self) -> Duration {
+        Self::now().duration_since(*self)
+    }
+
+    pub fn checked_add(&self, duration: Duration) -> Option<Self> {
+        match duration.as_micros().try_into() {
+            Ok(duration) => self.0.checked_add(duration).map(|i| Self(i)),
+            Err(_) => None,
+        }
+    }
+
+    pub fn checked_sub(&self, duration: Duration) -> Option<Self> {
+        match duration.as_micros().try_into() {
+            Ok(duration) => self.0.checked_sub(duration).map(|i| Self(i)),
+            Err(_) => None,
+        }
+    }
+}
+
+/// INSTANT
 
 struct State {
     ctx: GraphicsContext,
@@ -85,7 +135,6 @@ impl State {
 
         // Create the 3D objects!
         // Load 3D model from disk or as a HTTP request (for web support)
-        log::warn!("Load model");
         let obj_model = resources::load_model(
             &Path::new("banana").join("banana.obj"),
             &ctx.device,

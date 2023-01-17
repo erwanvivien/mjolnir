@@ -69,6 +69,7 @@ pub async fn load_texture(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
 ) -> anyhow::Result<texture::Texture> {
+    #[cfg(not(target_arch = "wasm32"))]
     assert!(
         file_name.exists(),
         "Texture file does not exist: {}",
