@@ -22,6 +22,9 @@ pub enum WindowEvents<'a> {
     MouseMoved {
         position: &'a PhysicalPosition<f64>,
     },
+    MouseWheel {
+        delta: &'a MouseScrollDelta,
+    },
     Draw,
 }
 
@@ -119,6 +122,9 @@ impl Window {
                         }),
                         WindowEvent::CursorMoved { position, .. } => {
                             callback(WindowEvents::MouseMoved { position })
+                        }
+                        WindowEvent::MouseWheel { delta, .. } => {
+                            callback(WindowEvents::MouseWheel { delta })
                         }
                         _ => {}
                     }

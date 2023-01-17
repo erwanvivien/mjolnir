@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use ::instant::Instant;
 use cgmath::prelude::*;
 use context::GraphicsContext;
 use node::Node;
@@ -13,6 +14,7 @@ use wasm_bindgen::prelude::*;
 mod camera;
 mod context;
 mod instance;
+mod instant;
 mod model;
 mod node;
 mod pass;
@@ -20,6 +22,7 @@ mod primitives;
 mod resources;
 mod texture;
 mod window;
+
 use crate::{
     camera::{Camera, CameraController},
     model::Keyframes,
@@ -30,51 +33,6 @@ use crate::{
 use crate::{instance::Instance, window::WindowEvents};
 
 pub use std::time::Duration;
-
-#[cfg(not(target_arch = "wasm32"))]
-pub use std::time::Instant;
-
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(inline_js = r#"
-export function performance_now() {
-  return performance.now();
-}"#)]
-extern "C" {
-    fn performance_now() -> f64;
-}
-
-#[cfg(target_arch = "wasm32")]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Instant(u64);
-
-#[cfg(target_arch = "wasm32")]
-impl Instant {
-    pub fn now() -> Self {
-        Self((performance_now() * 1000.0) as u64)
-    }
-
-    pub fn duration_since(&self, earlier: Instant) -> Duration {
-        Duration::from_micros(self.0 - earlier.0)
-    }
-
-    pub fn elapsed(&self) -> Duration {
-        Self::now().duration_since(*self)
-    }
-
-    pub fn checked_add(&self, duration: Duration) -> Option<Self> {
-        match duration.as_micros().try_into() {
-            Ok(duration) => self.0.checked_add(duration).map(|i| Self(i)),
-            Err(_) => None,
-        }
-    }
-
-    pub fn checked_sub(&self, duration: Duration) -> Option<Self> {
-        match duration.as_micros().try_into() {
-            Ok(duration) => self.0.checked_sub(duration).map(|i| Self(i)),
-            Err(_) => None,
-        }
-    }
-}
 
 struct State {
     ctx: GraphicsContext,
@@ -100,16 +58,8 @@ impl State {
         let ctx = GraphicsContext::new(window).await;
 
         // Setup the camera and it's initial position
-        let camera = Camera {
-            eye: (0.0, 5.0, -10.0).into(),
-            target: (0.0, 0.0, 0.0).into(),
-            up: cgmath::Vector3::unit_y(),
-            aspect: ctx.config.width as f32 / ctx.config.height as f32,
-            fovy: 45.0,
-            znear: 0.1,
-            zfar: 100.0,
-        };
-        let camera_controller = CameraController::new(0.2);
+        let camera = camera::Camera::new((0.0, 5.0, 10.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
+        let camera_controller = camera::CameraController::new(4.0, 0.4);
 
         // Initialize the pass
         let pass_config = PhongConfig {
@@ -344,6 +294,9 @@ impl State {
             self.ctx
                 .surface
                 .configure(&self.ctx.device, &self.ctx.config);
+
+            self.pass.projection.resize(new_size.width, new_size.height);
+
             // Make sure to current window size to depth texture - required for calc
             self.pass.depth_texture = texture::Texture::create_depth_texture(
                 &self.ctx.device,
@@ -356,26 +309,13 @@ impl State {
     // Handle input using WindowEvent
     pub fn keyboard(&mut self, state: ElementState, keycode: &VirtualKeyCode) -> bool {
         // Send any input to camera controller
-        self.camera_controller.process_events(&state, keycode)
-
-        // match event {
-        //     WindowEvent::CursorMoved { position, .. } => {
-        //         self.clear_color = wgpu::Color {
-        //             r: 0.0,
-        //             g: position.y as f64 / self.size.height as f64,
-        //             b: position.x as f64 / self.size.width as f64,
-        //             a: 1.0,
-        //         };
-        //         true
-        //     }
-        //     _ => false,
-        // }
+        self.camera_controller.process_keyboard(*keycode, state)
     }
 
-    pub fn mouse_moved(&mut self, position: &PhysicalPosition<f64>) {
-        self.camera_controller
-            .process_mouse_moved(position, &self.size);
+    pub fn mouse_moved(&mut self, position: PhysicalPosition<f64>) {
+        self.camera_controller.process_mouse(position);
     }
+
     pub fn mouse_input(
         &mut self,
         device_id: &DeviceId,
@@ -386,10 +326,16 @@ impl State {
             .process_mouse_input(device_id, state, button);
     }
 
-    fn update(&mut self) {
+    pub fn scroll(&mut self, delta: &MouseScrollDelta) {
+        self.camera_controller.process_scroll(delta);
+    }
+
+    fn update(&mut self, dt: Duration) {
         // Sync local app state with camera
-        self.camera_controller.update_camera(&mut self.camera);
-        self.pass.camera_uniform.update_view_proj(&self.camera);
+        self.camera_controller.update_camera(&mut self.camera, dt);
+        self.pass
+            .camera_uniform
+            .update_view_proj(&self.camera, &self.pass.projection);
         self.ctx.queue.write_buffer(
             &self.pass.global_uniform_buffer,
             0,
@@ -494,6 +440,7 @@ pub async fn run() {
 
     // State::new uses async code, so we're going to wait for it to finish
     let mut app = State::new(&window).await;
+    let mut last_render_time = instant::Instant::now(); // NEW!
 
     // @TODO: Wire up state methods again (like render)
     window.run(move |event| match event {
@@ -501,9 +448,12 @@ pub async fn run() {
             app.resize(winit::dpi::PhysicalSize { width, height });
         }
         WindowEvents::Draw => {
-            app.update();
+            let dt = last_render_time.elapsed();
+            last_render_time = instant::Instant::now();
+
+            app.update(dt);
             if let Err(err) = app.render() {
-                println!("Error in rendering {:?}", err);
+                log::error!("Error in rendering {:?}", err);
             }
         }
         WindowEvents::Keyboard {
@@ -513,8 +463,12 @@ pub async fn run() {
             app.keyboard(state, virtual_keycode);
         }
 
+        WindowEvents::MouseWheel { delta } => {
+            app.scroll(delta);
+        }
+
         WindowEvents::MouseMoved { position } => {
-            app.mouse_moved(position);
+            app.mouse_moved(*position);
         }
 
         WindowEvents::MouseInput {

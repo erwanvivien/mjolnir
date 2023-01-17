@@ -3,7 +3,7 @@ use std::{collections::HashMap, mem};
 use wgpu::{util::DeviceExt, BindGroupLayout, Device, Queue, Surface};
 
 use crate::{
-    camera::{Camera, CameraUniform},
+    camera::{Camera, CameraUniform, Projection},
     instance::{Instance, InstanceRaw},
     model::{self, DrawLight, DrawModel, Vertex},
     node::Node,
@@ -71,6 +71,7 @@ pub struct PhongPass {
     pub light_render_pipeline: wgpu::RenderPipeline,
     // Camera
     pub camera_uniform: CameraUniform,
+    pub(crate) projection: Projection,
     // Instances
     instance_buffers: HashMap<usize, wgpu::Buffer>,
 }
@@ -271,8 +272,11 @@ impl PhongPass {
         let depth_texture = texture::Texture::create_depth_texture(device, config, "depth_texture");
 
         // Setup camera uniform
+        let projection =
+            Projection::new(config.width, config.height, cgmath::Deg(45.0), 0.1, 100.0);
+
         let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(camera);
+        camera_uniform.update_view_proj(camera, &projection);
 
         let light_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Light Shader"),
@@ -321,6 +325,8 @@ impl PhongPass {
             depth_texture,
             render_pipeline,
             camera_uniform,
+            projection,
+
             light_uniform,
             light_buffer,
             light_render_pipeline,
