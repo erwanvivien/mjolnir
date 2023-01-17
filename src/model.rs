@@ -112,7 +112,7 @@ where
     fn draw_mesh_instanced(
         &mut self,
         mesh: &'b Mesh,
-        material: &'b Material,
+        _material: &'b Material,
         instances: Range<u32>,
         local_bind_group: &'b wgpu::BindGroup,
     ) {

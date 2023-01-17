@@ -1,15 +1,11 @@
-use std::{iter, path::Path};
+use std::path::Path;
 
 use cgmath::prelude::*;
 use context::GraphicsContext;
 use node::Node;
 use pass::{phong::PhongPass, Pass};
-use wgpu::util::DeviceExt;
-use winit::{
-    dpi::PhysicalPosition,
-    event::*,
-    event_loop::{ControlFlow, EventLoop},
-};
+
+use winit::{dpi::PhysicalPosition, event::*};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -25,22 +21,16 @@ mod resources;
 mod texture;
 mod window;
 use crate::{
-    camera::{Camera, CameraController, CameraUniform},
-    context::create_render_pipeline,
+    camera::{Camera, CameraController},
     model::Keyframes,
     pass::phong::{Locals, PhongConfig},
     primitives::{sphere::generate_sphere, PrimitiveMesh},
     window::Window,
 };
-use crate::{
-    instance::{Instance, InstanceRaw},
-    window::WindowEvents,
-};
-use model::{DrawLight, DrawModel, Vertex};
+use crate::{instance::Instance, window::WindowEvents};
 
-use std::ops::{Add, AddAssign, Sub, SubAssign};
 pub use std::time::Duration;
-/// INSTANT
+
 #[cfg(not(target_arch = "wasm32"))]
 pub use std::time::Instant;
 
@@ -86,15 +76,11 @@ impl Instant {
     }
 }
 
-/// INSTANT
-
 struct State {
     ctx: GraphicsContext,
     pass: PhongPass,
     // Window size
     size: winit::dpi::PhysicalSize<u32>,
-    // Clear color for mouse interactions
-    clear_color: wgpu::Color,
     // Camera
     camera: Camera,
     camera_controller: CameraController,
@@ -111,7 +97,7 @@ impl State {
         let size = window.window.inner_size();
 
         // Initialize the graphic context
-        let ctx = GraphicsContext::new(&window).await;
+        let ctx = GraphicsContext::new(window).await;
 
         // Setup the camera and it's initial position
         let camera = Camera {
@@ -167,7 +153,7 @@ impl State {
         )
         .await;
 
-        let plane_primitive = PrimitiveMesh::new(
+        let _plane_primitive = PrimitiveMesh::new(
             &ctx.device,
             &ctx.queue,
             &primitives::plane::plane_vertices(0.5),
@@ -336,14 +322,11 @@ impl State {
         ];
 
         // Clear color used for mouse input interaction
-        let clear_color = wgpu::Color::BLACK;
-
         let time = Instant::now();
 
         Self {
             ctx,
             pass,
-            clear_color,
             size,
             camera,
             camera_controller,
@@ -373,7 +356,7 @@ impl State {
     // Handle input using WindowEvent
     pub fn keyboard(&mut self, state: ElementState, keycode: &VirtualKeyCode) -> bool {
         // Send any input to camera controller
-        self.camera_controller.process_events(&state, &keycode)
+        self.camera_controller.process_events(&state, keycode)
 
         // match event {
         //     WindowEvent::CursorMoved { position, .. } => {
@@ -391,7 +374,7 @@ impl State {
 
     pub fn mouse_moved(&mut self, position: &PhysicalPosition<f64>) {
         self.camera_controller
-            .process_mouse_moved(&position, &self.size);
+            .process_mouse_moved(position, &self.size);
     }
     pub fn mouse_input(
         &mut self,
@@ -429,10 +412,9 @@ impl State {
 
         // Update local uniforms
         let current_time = &self.time.elapsed().as_secs_f32();
-        let mut node_index = 0;
-        for node in &mut self.nodes {
+        for (node_index, node) in self.nodes.iter_mut().enumerate() {
             // Play animations
-            if node.model.animations.len() > 0 {
+            if !node.model.animations.is_empty() {
                 // Loop through all animations
                 // TODO: Ideally we'd play a certain animation by name - we assume first one for now
                 let mut current_keyframe_index = 0;
@@ -441,7 +423,7 @@ impl State {
                         if timestamp > current_time {
                             break;
                         }
-                        if &current_keyframe_index < &(&animation.timestamps.len() - 1) {
+                        if current_keyframe_index < &animation.timestamps.len() - 1 {
                             current_keyframe_index += 1;
                         }
                     }
@@ -457,9 +439,7 @@ impl State {
                     Keyframes::Other => (),
                 }
 
-                if current_frame.is_some() {
-                    let current_frame = current_frame.unwrap();
-
+                if let Some(current_frame) = current_frame {
                     node.locals.position = [
                         current_frame[0],
                         current_frame[1],
@@ -469,30 +449,21 @@ impl State {
                 }
             }
 
-            // node.locals.position = [
-            //     node.locals.position[0],
-            //     (node.locals.position[1] + 0.001),
-            //     (node.locals.position[2] - 0.001),
-            //     node.locals.position[3],
-            // ];
-            &self
-                .pass
+            self.pass
                 .uniform_pool
                 .update_uniform(node_index, node.locals, &self.ctx.queue);
-            node_index += 1;
         }
     }
 
     // Primary render flow
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        match self.pass.draw(
+        if let Err(err) = self.pass.draw(
             &self.ctx.surface,
             &self.ctx.device,
             &self.ctx.queue,
             &self.nodes,
         ) {
-            Err(err) => println!("Error in rendering"),
-            Ok(_) => (),
+            log::error!("Error in draw: {:?}", err);
         }
 
         Ok(())
@@ -531,9 +502,8 @@ pub async fn run() {
         }
         WindowEvents::Draw => {
             app.update();
-            match app.render() {
-                Err(err) => println!("Error in rendering"),
-                Ok(_) => (),
+            if let Err(err) = app.render() {
+                println!("Error in rendering {:?}", err);
             }
         }
         WindowEvents::Keyboard {

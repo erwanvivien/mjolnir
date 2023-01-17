@@ -1,13 +1,11 @@
-use std::{collections::HashMap, iter, mem};
+use std::{collections::HashMap, mem};
 
-use cgmath::{InnerSpace, Rotation3, Zero};
 use wgpu::{util::DeviceExt, BindGroupLayout, Device, Queue, Surface};
 
 use crate::{
     camera::{Camera, CameraUniform},
-    context::create_render_pipeline,
     instance::{Instance, InstanceRaw},
-    model::{self, DrawLight, DrawModel, Model, Vertex},
+    model::{self, DrawLight, DrawModel, Vertex},
     node::Node,
     texture,
 };
@@ -81,7 +79,7 @@ impl PhongPass {
     pub fn new(
         phong_config: &PhongConfig,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        _queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         camera: &Camera,
     ) -> PhongPass {
@@ -241,7 +239,7 @@ impl PhongPass {
         let multisample = wgpu::MultisampleState {
             ..Default::default()
         };
-        let color_format = texture::Texture::DEPTH_FORMAT;
+        let _color_format = texture::Texture::DEPTH_FORMAT;
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("[Phong] Pipeline"),
@@ -270,12 +268,11 @@ impl PhongPass {
         });
 
         // Create depth texture
-        let depth_texture =
-            texture::Texture::create_depth_texture(&device, &config, "depth_texture");
+        let depth_texture = texture::Texture::create_depth_texture(device, config, "depth_texture");
 
         // Setup camera uniform
         let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera);
+        camera_uniform.update_view_proj(camera);
 
         let light_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Light Shader"),
@@ -338,7 +335,7 @@ impl Pass for PhongPass {
         surface: &Surface,
         device: &Device,
         queue: &Queue,
-        nodes: &Vec<Node>,
+        nodes: &[Node],
     ) -> Result<(), wgpu::SurfaceError> {
         let output = surface.get_current_texture()?;
         let view = output
@@ -381,8 +378,8 @@ impl Pass for PhongPass {
             });
 
             // Allocate buffers for local uniforms
-            if (self.uniform_pool.buffers.len() < nodes.len()) {
-                self.uniform_pool.alloc_buffers(nodes.len(), &device);
+            if self.uniform_pool.buffers.len() < nodes.len() {
+                self.uniform_pool.alloc_buffers(nodes.len(), device);
             }
 
             // Loop over the nodes/models in a scene and setup the specific models
@@ -446,8 +443,7 @@ impl Pass for PhongPass {
             render_pass.draw_light_model(
                 &nodes[1].model,
                 &self.global_bind_group,
-                &self
-                    .local_bind_groups
+                self.local_bind_groups
                     .get(&1)
                     .expect("No local bind group found for lighting"),
             );
@@ -466,7 +462,7 @@ impl Pass for PhongPass {
                 // Draw all the model instances
                 render_pass.draw_model_instanced(
                     &node.model,
-                    0..*&node.instances.len() as u32,
+                    0..node.instances.len() as u32,
                     &self.local_bind_groups[&model_index],
                 );
 

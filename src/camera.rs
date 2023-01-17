@@ -1,4 +1,4 @@
-use cgmath::{prelude::*, Point3};
+use cgmath::prelude::*;
 
 use winit::{dpi::PhysicalPosition, event::*};
 
@@ -122,14 +122,14 @@ impl CameraController {
         position: &PhysicalPosition<f64>,
         screen_size: &winit::dpi::PhysicalSize<u32>,
     ) {
-        // println!(
-        //     "Mouse position X: {} - Y : {}",
-        //     &position.x / screen_size.width as f64,
-        //     &position.y / screen_size.height as f64
-        // );
+        log::info!(
+            "Mouse position X: {} - Y : {}",
+            position.x / screen_size.width as f64,
+            position.y / screen_size.height as f64
+        );
 
-        let current_x = &position.x / screen_size.width as f64;
-        let current_y = &position.y / screen_size.height as f64;
+        let current_x = position.x / screen_size.width as f64;
+        let current_y = position.y / screen_size.height as f64;
 
         // Not tracking? Set initial position
         if self.is_mouse_right_pressed && !self.is_mouse_right_tracked {
@@ -156,7 +156,7 @@ impl CameraController {
 
     pub fn process_mouse_input(
         &mut self,
-        device_id: &DeviceId,
+        _device_id: &DeviceId,
         state: &ElementState,
         button: &MouseButton,
     ) {
@@ -189,7 +189,7 @@ impl CameraController {
 
         // Redo radius calc in case the up/ down is pressed.
         let forward = camera.target - camera.eye;
-        let forward_mag = forward.magnitude();
+        let _forward_mag = forward.magnitude();
 
         // Keyboard input
         if self.is_right_pressed {
@@ -211,29 +211,25 @@ impl CameraController {
         }
 
         // Left shift pressed
-        if self.is_modifier_shift_pressed {
-            if self.is_up_pressed {
-                // Move the character down in the Z space (like jumping up)
-                // Move the eye up (but stay focused on target)
-                camera.eye = camera.target - (forward + camera.up * self.speed);
-                // Move the target up
-                camera.target -= camera.up * self.speed;
-            }
+        if self.is_modifier_shift_pressed && self.is_up_pressed {
+            // Move the character down in the Z space (like jumping up)
+            // Move the eye up (but stay focused on target)
+            camera.eye = camera.target - (forward + camera.up * self.speed);
+            // Move the target up
+            camera.target -= camera.up * self.speed;
         }
 
         // Shift actions that need default state
-        if !self.is_modifier_shift_pressed {
-            if self.is_up_pressed {
-                // "rotate around up"
-                // camera.eye =
-                // camera.target - (forward - camera.up * self.speed).normalize() * forward_mag;
+        if !self.is_modifier_shift_pressed && self.is_up_pressed {
+            // "rotate around up"
+            // camera.eye =
+            // camera.target - (forward - camera.up * self.speed).normalize() * forward_mag;
 
-                // Move the character up in the Z space (like jumping up)
-                // Move the eye up (but stay focused on target)
-                camera.eye = camera.target - (forward - camera.up * self.speed);
-                // Move the target up
-                camera.target += camera.up * self.speed;
-            }
+            // Move the character up in the Z space (like jumping up)
+            // Move the eye up (but stay focused on target)
+            camera.eye = camera.target - (forward - camera.up * self.speed);
+            // Move the target up
+            camera.target += camera.up * self.speed;
         }
 
         // Mouse input

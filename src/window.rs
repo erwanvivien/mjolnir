@@ -1,7 +1,7 @@
 use winit::{
     dpi::PhysicalPosition,
     event::*,
-    event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
+    event_loop::{ControlFlow, EventLoop},
     window,
 };
 
@@ -64,7 +64,7 @@ impl Window {
         Self { event_loop, window }
     }
 
-    pub fn run(self, mut callback: impl 'static + FnMut(WindowEvents) -> ()) {
+    pub fn run(self, mut callback: impl 'static + FnMut(WindowEvents)) {
         self.event_loop.run(move |event, _, control_flow| {
             match event {
                 Event::WindowEvent {
@@ -118,9 +118,7 @@ impl Window {
                             button,
                         }),
                         WindowEvent::CursorMoved { position, .. } => {
-                            callback(WindowEvents::MouseMoved {
-                                position: &position,
-                            })
+                            callback(WindowEvents::MouseMoved { position })
                         }
                         _ => {}
                     }

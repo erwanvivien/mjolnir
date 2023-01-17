@@ -1,10 +1,8 @@
 use crate::{
-    model::{self, Material, ModelVertex},
+    model::{self, ModelVertex},
     resources::load_texture,
-    texture::Texture,
-    Vertex,
 };
-use std::{ops::Range, path::Path};
+use std::path::Path;
 use wgpu::util::DeviceExt;
 pub mod cube;
 pub mod plane;
@@ -45,12 +43,12 @@ impl PrimitiveMesh {
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(&format!("{:?} Vertex Buffer", primitive_type)),
-            contents: bytemuck::cast_slice(&vertices),
+            contents: bytemuck::cast_slice(vertices),
             usage: wgpu::BufferUsages::VERTEX,
         });
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(&format!("{:?} Index Buffer", primitive_type)),
-            contents: bytemuck::cast_slice(&indices),
+            contents: bytemuck::cast_slice(indices),
             usage: wgpu::BufferUsages::INDEX,
         });
 

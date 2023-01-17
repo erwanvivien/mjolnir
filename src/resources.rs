@@ -7,12 +7,12 @@ use gltf::Gltf;
 use wgpu::util::DeviceExt;
 
 use crate::{
-    model::{self, AnimationClip, Keyframes, ModelVertex},
+    model::{self, AnimationClip, Keyframes},
     texture,
 };
 
 #[cfg(not(target_arch = "wasm32"))]
-const FILE: &'static str = concat!(env!("CARGO_MANIFEST_DIR"));
+const FILE: &str = concat!(env!("CARGO_MANIFEST_DIR"));
 
 #[cfg(target_arch = "wasm32")]
 fn format_url(file_name: &Path) -> reqwest::Url {
@@ -39,7 +39,7 @@ pub async fn load_string(file_name: &Path) -> anyhow::Result<String> {
             file_name.display()
         );
 
-        Ok(std::fs::read_to_string(&file_name)?)
+        Ok(std::fs::read_to_string(file_name)?)
     }
 }
 
@@ -60,7 +60,7 @@ pub async fn load_binary(file_name: &Path) -> anyhow::Result<Vec<u8>> {
             file_name.display()
         );
 
-        Ok(std::fs::read(&file_name)?)
+        Ok(std::fs::read(file_name)?)
     }
 }
 

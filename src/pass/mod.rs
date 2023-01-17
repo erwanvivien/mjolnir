@@ -1,6 +1,6 @@
 use wgpu::{Device, Queue, Surface};
 
-use crate::{model::Model, node::Node};
+use crate::node::Node;
 
 pub mod phong;
 
@@ -10,7 +10,7 @@ pub trait Pass {
         surface: &Surface,
         device: &Device,
         queue: &Queue,
-        nodes: &Vec<Node>,
+        nodes: &[Node],
     ) -> Result<(), wgpu::SurfaceError>;
 }
 
@@ -40,7 +40,7 @@ impl UniformPool {
 
         for _ in 0..count {
             let local_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(&self.label),
+                label: Some(self.label),
                 size: self.size,
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
@@ -50,7 +50,7 @@ impl UniformPool {
     }
 
     pub fn update_uniform<T: bytemuck::Pod>(&self, index: usize, data: T, queue: &Queue) {
-        if &self.buffers.len() > &0 {
+        if !self.buffers.is_empty() {
             queue.write_buffer(&self.buffers[index], 0, bytemuck::cast_slice(&[data]));
         }
     }
