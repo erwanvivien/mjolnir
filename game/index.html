@@ -23,6 +23,10 @@
       setTimeout(() => {
         last_update = document.getElementById("last_update");
         updateTime(new Date());
+
+        document.addEventListener("contextmenu", (event) =>
+          event.preventDefault()
+        );
       }, 1000);
     </script>
 
