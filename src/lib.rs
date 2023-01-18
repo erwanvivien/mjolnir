@@ -87,13 +87,9 @@ impl State {
         .await
         .expect("Couldn't load model. Maybe path is wrong?");
 
-        let gltf_model = resources::load_model(
-            &Path::new("tris").join("Cube-Tris-Textured-Animated.gltf"),
-            &ctx.device,
-            &ctx.queue,
-        )
-        .await
-        .expect("Couldn't load model. Maybe path is wrong?");
+        let gltf_model = resources::load_model(&Path::new("car.glb"), &ctx.device, &ctx.queue)
+            .await
+            .unwrap();
 
         let cube_primitive = PrimitiveMesh::new(
             &ctx.device,
@@ -422,7 +418,7 @@ pub async fn run() {
         #[cfg(target_arch = "wasm32")]
         {
             std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-            console_log::init_with_level(log::Level::Warn).expect("Couldn't initialize logger");
+            console_log::init_with_level(log::Level::Info).expect("Couldn't initialize logger");
         }
         #[cfg(not(target_arch = "wasm32"))]
         {

@@ -18,7 +18,8 @@ const FILE: &str = concat!(env!("CARGO_MANIFEST_DIR"));
 fn format_url(file_name: &Path) -> reqwest::Url {
     let window = web_sys::window().unwrap();
     let location = window.location();
-    let base = reqwest::Url::parse(&format!("{}/", location.origin().unwrap())).unwrap();
+    let file = &format!("{}/", location.origin().unwrap());
+    let base = reqwest::Url::parse(file).unwrap();
 
     base.join(&file_name.display().to_string()).unwrap()
 }
@@ -27,6 +28,7 @@ pub async fn load_string(file_name: &Path) -> anyhow::Result<String> {
     #[cfg(target_arch = "wasm32")]
     {
         let url = format_url(file_name);
+        log::info!("Loading http file: {}", url);
         let txt = reqwest::get(url).await?.text().await?;
 
         Ok(txt)
@@ -95,6 +97,8 @@ pub async fn load_model(
         load_model_obj(&file_name, device, queue).await
     } else if file_name.extension() == Some("gltf".as_ref()) {
         load_model_gltf(&file_name, device, queue).await
+    } else if file_name.extension() == Some("glb".as_ref()) {
+        load_model_glb(&file_name, device, queue).await
     } else {
         Err(anyhow::anyhow!("Unsupported model format"))
     }
@@ -213,6 +217,8 @@ pub async fn load_model_gltf(
 
         buffer_data.push(bin);
     }
+
+    log::debug!("Initizalized buffers");
 
     // Load animations
     let mut animation_clips = Vec::new();
@@ -357,5 +363,200 @@ pub async fn load_model_gltf(
         meshes,
         materials,
         animations: animation_clips,
+    })
+}
+
+pub async fn load_model_glb(
+    file_name: &Path,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+) -> anyhow::Result<model::Model> {
+    let gltf_text = load_binary(file_name).await?;
+    let gltf_cursor = Cursor::new(gltf_text);
+    let gltf_reader = BufReader::new(gltf_cursor);
+    let gltf = Gltf::from_reader(gltf_reader)?;
+
+    // Load buffers
+    let mut buffer_data = Vec::new();
+    for buffer in gltf.buffers() {
+        let bin = match buffer.source() {
+            gltf::buffer::Source::Bin => {
+                if let Some(blob) = gltf.blob.clone() {
+                    blob
+                } else {
+                    log::error!("Missing blob");
+                    return Err(anyhow::anyhow!("Missing blob"));
+                }
+            }
+            gltf::buffer::Source::Uri(uri) => {
+                let uri = file_name.with_file_name(uri);
+                load_binary(&uri).await?
+            }
+        };
+
+        buffer_data.push(bin);
+    }
+
+    log::debug!("Initizalized buffers");
+
+    // Load animations
+    let mut animation_clips = Vec::new();
+    for animation in gltf.animations() {
+        for channel in animation.channels() {
+            let reader = channel.reader(|buffer| Some(&buffer_data[buffer.index()]));
+            let timestamps = if let Some(inputs) = reader.read_inputs() {
+                match inputs {
+                    gltf::accessor::Iter::Standard(times) => {
+                        let times: Vec<f32> = times.collect();
+                        times
+                    }
+                    gltf::accessor::Iter::Sparse(_) => {
+                        log::error!("Sparse keyframes not supported");
+                        Vec::new()
+                    }
+                }
+            } else {
+                log::error!("Couldn't read inputs");
+                Vec::new()
+            };
+
+            let keyframes = if let Some(outputs) = reader.read_outputs() {
+                match outputs {
+                    gltf::animation::util::ReadOutputs::Translations(translation) => {
+                        let translation_vec = translation
+                            .map(|tr| {
+                                let vector: Vec<f32> = tr.into();
+                                vector
+                            })
+                            .collect();
+                        Keyframes::Translation(translation_vec)
+                    }
+                    _ => todo!(),
+                }
+            } else {
+                log::error!("Couldn't read outputs");
+                Keyframes::Other
+            };
+
+            animation_clips.push(AnimationClip {
+                name: animation.name().unwrap_or("Default").to_string(),
+                keyframes,
+                timestamps,
+            });
+        }
+    }
+
+    // Load materials
+    let mut materials = Vec::new();
+    log::info!("Looping through materials");
+    for material in gltf.materials() {
+        log::info!(
+            r#"Material#{:?} "{}""#,
+            material.index().map(|f| f as isize).unwrap_or(-1),
+            material.name().unwrap_or("Unnamed")
+        );
+        let pbr = material.pbr_metallic_roughness();
+        let texture_source = &pbr
+            .base_color_texture()
+            .map(|tex| tex.texture().source().source())
+            .expect("texture");
+
+        let diffuse_texture = match texture_source {
+            gltf::image::Source::View { view, .. } => {
+                let start = view.offset();
+                let end = view.offset() + view.length();
+                let buffer = &buffer_data[view.buffer().index()][start..end];
+                //
+                let texture = texture::Texture::from_bytes(
+                    device,
+                    queue,
+                    buffer,
+                    &file_name.display().to_string(),
+                );
+                let Ok(texture) = texture else {
+                    log::error!("Couldn't load texture from buffer#{}: {}",view.buffer().index(), texture.err().unwrap());
+                    continue;
+                };
+
+                texture
+            }
+            gltf::image::Source::Uri { uri, .. } => {
+                let uri = file_name.with_file_name(uri);
+                load_texture(&uri, device, queue).await?
+            }
+        };
+
+        materials.push(model::Material {
+            name: material.name().unwrap_or("Default Material").to_string(),
+            diffuse_texture,
+        });
+    }
+
+    let mut meshes = Vec::new();
+    for mesh in gltf.meshes() {
+        log::info!(
+            r#"Mesh#{} "{}""#,
+            mesh.index(),
+            mesh.name().unwrap_or("Unnamed")
+        );
+
+        let primitives = mesh.primitives();
+        primitives.for_each(|primitive| {
+            let reader = primitive.reader(|buffer| Some(&buffer_data[buffer.index()]));
+
+            log::info!("[START] Reading positions, normals, tex_coords");
+            let (positions, normals, tex_coords) = (
+                reader.read_positions().unwrap(),
+                reader.read_normals().unwrap(),
+                reader.read_tex_coords(0).unwrap().into_f32(),
+            );
+            log::info!("[END  ] Reading positions, normals, tex_coords");
+
+            log::info!("[START] Reading indices");
+            let indices = reader.read_indices().map(|indices| indices.into_u32());
+            let indices = match indices {
+                Some(indices) => indices.collect::<Vec<_>>(),
+                None => (0..positions.len() as u32).collect(),
+            };
+            log::info!("[END  ] Reading indices");
+
+            let vertices = positions
+                .zip(normals)
+                .zip(tex_coords)
+                .map(|((position, normal), tex_coords)| model::ModelVertex {
+                    position,
+                    normal,
+                    tex_coords,
+                })
+                .collect::<Vec<_>>();
+
+            log::info!("[START] Creating buffers");
+            let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(&format!("{:?} Vertex Buffer", file_name)),
+                contents: bytemuck::cast_slice(&vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+            let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(&format!("{:?} Index Buffer", file_name)),
+                contents: bytemuck::cast_slice(&indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+            log::info!("[END  ] Creating buffers");
+
+            meshes.push(model::Mesh {
+                name: file_name.display().to_string(),
+                vertex_buffer,
+                index_buffer,
+                num_elements: indices.len() as u32,
+                material: primitive.material().index().unwrap_or(0),
+            });
+        });
+    }
+
+    Ok(model::Model {
+        meshes,
+        materials,
+        // animations: animation_clips,
+        animations: Vec::new(),
     })
 }
