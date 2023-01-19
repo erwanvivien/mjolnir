@@ -66,6 +66,7 @@ impl PrimitiveMesh {
             meshes,
             materials,
             animations,
+            particles: Vec::new(),
         };
 
         Self { model }

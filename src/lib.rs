@@ -27,7 +27,6 @@ use crate::{
     camera::{Camera, CameraController},
     model::Keyframes,
     pass::phong::{Locals, PhongConfig},
-    primitives::{sphere::generate_sphere, PrimitiveMesh},
     window::Window,
 };
 use crate::{instance::Instance, window::WindowEvents};
@@ -71,14 +70,6 @@ impl State {
 
         // Create the 3D objects!
         // Load 3D model from disk or as a HTTP request (for web support)
-        let obj_model = resources::load_model(
-            &Path::new("banana").join("banana.obj"),
-            &ctx.device,
-            &ctx.queue,
-        )
-        .await
-        .expect("Couldn't load model. Maybe path is wrong?");
-
         let ferris_model = resources::load_model(
             &Path::new("ferris").join("ferris.obj"),
             &ctx.device,
@@ -87,30 +78,9 @@ impl State {
         .await
         .expect("Couldn't load model. Maybe path is wrong?");
 
-        let gltf_model = resources::load_model(&Path::new("car.glb"), &ctx.device, &ctx.queue)
+        let car_model = resources::load_model(&Path::new("car.glb"), &ctx.device, &ctx.queue)
             .await
             .unwrap();
-
-        let cube_primitive = PrimitiveMesh::new(
-            &ctx.device,
-            &ctx.queue,
-            &primitives::cube::cube_vertices(0.5),
-            &primitives::cube::cube_indices(),
-        )
-        .await;
-
-        let _plane_primitive = PrimitiveMesh::new(
-            &ctx.device,
-            &ctx.queue,
-            &primitives::plane::plane_vertices(0.5),
-            &primitives::plane::plane_indices(),
-        )
-        .await;
-
-        let (sphere_vertices, sphere_indices) = generate_sphere(2.0, 36, 18);
-
-        let sphere_primitive =
-            PrimitiveMesh::new(&ctx.device, &ctx.queue, &sphere_vertices, &sphere_indices).await;
 
         // Create instances for each object with locational data (position + rotation)
         // Renderer currently defaults to using instances. Want one object? Pass a Vec of 1 instance.
@@ -119,30 +89,8 @@ impl State {
         // And use the "displacement" matrix above to offset objects with a gap
         const SPACE_BETWEEN: f32 = 3.0;
         const NUM_INSTANCES_PER_ROW: u32 = 10;
-        let banana_instances = (0..NUM_INSTANCES_PER_ROW)
-            .flat_map(|z| {
-                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                    let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-                    let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-
-                    let position = cgmath::Vector3 { x, y: 0.0, z };
-
-                    let rotation = if position.is_zero() {
-                        cgmath::Quaternion::from_axis_angle(
-                            cgmath::Vector3::unit_z(),
-                            cgmath::Deg(0.0),
-                        )
-                    } else {
-                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
-                    };
-
-                    Instance { position, rotation }
-                })
-            })
-            .collect::<Vec<_>>();
-
         // More "manual" placement as an example
-        let ferris_instances = (0..2)
+        let ferris_instances = (0..1)
             .map(|z| {
                 let z = SPACE_BETWEEN * (z as f32);
                 let position = cgmath::Vector3 { x: z, y: 1.0, z };
@@ -155,117 +103,32 @@ impl State {
             })
             .collect::<Vec<_>>();
 
-        // The cube primitive instances (aka positions)
-        let cube_primitive_instances = (0..2)
-            .map(|z| {
-                let z = SPACE_BETWEEN * (z as f32);
-                let position = cgmath::Vector3 {
-                    x: -z + 2.0,
-                    y: 2.0,
-                    z: -z,
-                };
-                let rotation = if position.is_zero() {
-                    cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
-                } else {
-                    cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
-                };
-                Instance { position, rotation }
-            })
-            .collect::<Vec<_>>();
-
-        let plane_primitive_instances = vec![Instance {
-            position: cgmath::Vector3 {
-                x: -3.0,
-                y: 3.0,
-                z: -3.0,
-            },
-            rotation: cgmath::Quaternion::from_axis_angle(
-                cgmath::Vector3::unit_z(),
-                cgmath::Deg(0.0),
-            ),
-        }];
-
-        let sphere_primitive_instances = vec![Instance {
-            position: cgmath::Vector3 {
-                x: 3.0,
-                y: 3.0,
-                z: 3.0,
-            },
-            rotation: cgmath::Quaternion::from_axis_angle(
-                cgmath::Vector3::unit_z(),
-                cgmath::Deg(0.0),
-            ),
-        }];
-
-        // Create the nodes
-        let banana_node = Node {
-            parent: 0,
-            locals: Locals {
-                position: [0.0, 0.0, 0.0, 0.0],
-                color: [0.0, 0.0, 1.0, 1.0],
-                normal: [0.0, 0.0, 0.0, 0.0],
-                lights: [0.0, 0.0, 0.0, 0.0],
-            },
-            model: obj_model,
-            instances: banana_instances,
-        };
-
         let ferris_node = Node {
             parent: 0,
             locals: Locals {
-                position: [0.0, 0.0, 0.0, 0.0],
+                position: [0.0, 0.0, -0.2, 0.0],
                 color: [0.0, 0.0, 1.0, 1.0],
                 normal: [0.0, 0.0, 0.0, 0.0],
                 lights: [0.0, 0.0, 0.0, 0.0],
             },
             model: ferris_model,
+            instances: ferris_instances.clone(),
+        };
+
+        let car_node = Node {
+            parent: 0,
+            locals: Locals {
+                position: [0.0, 0.0, 0.0, 0.0],
+                color: [0.0, 0.0, 1.0, 1.0],
+                normal: [0.0, 0.0, 0.0, 0.0],
+                lights: [0.0, 0.0, 0.0, 0.0],
+            },
+            model: car_model,
             instances: ferris_instances,
         };
 
-        let cube_primitive_node = Node {
-            parent: 0,
-            locals: Locals {
-                position: [0.0, 0.0, 0.0, 0.0],
-                color: [0.0, 0.0, 1.0, 1.0],
-                normal: [0.0, 0.0, 0.0, 0.0],
-                lights: [0.0, 0.0, 0.0, 0.0],
-            },
-            model: cube_primitive.model,
-            instances: cube_primitive_instances,
-        };
-
-        let plane_primitive_node = Node {
-            parent: 0,
-            locals: Locals {
-                position: [0.0, 0.0, 0.0, 0.0],
-                color: [0.0, 0.0, 1.0, 1.0],
-                normal: [0.0, 0.0, 0.0, 0.0],
-                lights: [0.0, 0.0, 0.0, 0.0],
-            },
-            model: gltf_model,
-            instances: plane_primitive_instances,
-        };
-
-        let sphere_primitive_node = Node {
-            parent: 0,
-            locals: Locals {
-                position: [0.0, 0.0, 0.0, 0.0],
-                color: [0.0, 0.0, 1.0, 1.0],
-                normal: [0.0, 0.0, 0.0, 0.0],
-                lights: [0.0, 0.0, 0.0, 0.0],
-            },
-            model: sphere_primitive.model,
-            instances: sphere_primitive_instances,
-        };
-
         // Put all our nodes into an Vector to loop over later
-        let nodes = vec![
-            banana_node,
-            ferris_node,
-            cube_primitive_node,
-            plane_primitive_node,
-            sphere_primitive_node,
-        ];
+        let nodes = vec![ferris_node, car_node];
 
         // Clear color used for mouse input interaction
         let time = Instant::now();
