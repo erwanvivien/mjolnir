@@ -350,7 +350,7 @@ fn render_pass(
     let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("Render Pass"),
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            view: &view,
+            view,
             resolve_target: None,
             ops: wgpu::Operations {
                 // Set the clear color during redraw
@@ -384,8 +384,7 @@ fn render_pass(
     // local uniform bind group and instance buffers to send to shader
     // This is separate loop from the render because of Rust ownership
     // (can prob wrap in block instead to limit mutable use)
-    let mut model_index = 0;
-    for node in nodes {
+    for (model_index, node) in nodes.iter().enumerate() {
         let local_buffer = &phong_pass.uniform_pool.buffers[model_index];
 
         // We create a bind group for each model's local uniform data
@@ -436,8 +435,6 @@ fn render_pass(
 
                 instance_buffer
             });
-
-        model_index += 1;
     }
 
     if let Some(light_model) = &phong_pass.light_model {
@@ -460,8 +457,7 @@ fn render_pass(
 
     // Render/draw all nodes/models
     // We reset index here to use again
-    model_index = 0;
-    for node in nodes {
+    for (model_index, node) in nodes.iter().enumerate() {
         // Set the instance buffer unique to the model
         render_pass.set_vertex_buffer(1, phong_pass.instance_buffers[&model_index].slice(..));
 
@@ -471,8 +467,6 @@ fn render_pass(
             0..node.instances.len() as u32,
             &phong_pass.local_bind_groups[&model_index],
         );
-
-        model_index += 1;
     }
 }
 

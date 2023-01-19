@@ -91,7 +91,7 @@ impl State {
         .await
         .expect("Couldn't load model. Maybe path is wrong?");
 
-        let car_model = resources::load_model(&Path::new("car.glb"), &ctx.device, &ctx.queue)
+        let car_model = resources::load_model(Path::new("car.glb"), &ctx.device, &ctx.queue)
             .await
             .unwrap();
 

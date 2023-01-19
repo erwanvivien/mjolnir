@@ -205,9 +205,9 @@ impl CameraController {
             MouseButton::Right => {
                 self.mouse_right = *state == ElementState::Pressed;
             }
-            // MouseButton::Left => todo!(),
-            // MouseButton::Middle => todo!(),
-            _ => (),
+            MouseButton::Left => {}
+            MouseButton::Middle => {}
+            _ => {}
         }
     }
 
