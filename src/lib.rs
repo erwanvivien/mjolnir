@@ -198,14 +198,8 @@ impl State {
         self.camera_controller.process_mouse(position);
     }
 
-    pub fn mouse_input(
-        &mut self,
-        device_id: &DeviceId,
-        state: &ElementState,
-        button: &MouseButton,
-    ) {
-        self.camera_controller
-            .process_mouse_input(device_id, state, button);
+    pub fn mouse_input(&mut self, state: &ElementState, button: &MouseButton) {
+        self.camera_controller.process_mouse_input(state, button);
     }
 
     pub fn scroll(&mut self, delta: &MouseScrollDelta) {
@@ -353,12 +347,8 @@ pub async fn run() {
             app.mouse_moved(*position);
         }
 
-        WindowEvents::MouseInput {
-            device_id,
-            state,
-            button,
-        } => {
-            app.mouse_input(device_id, state, button);
+        WindowEvents::MouseInput { state, button } => {
+            app.mouse_input(state, button);
         }
     });
 }

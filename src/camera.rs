@@ -200,12 +200,7 @@ impl CameraController {
         };
     }
 
-    pub fn process_mouse_input(
-        &mut self,
-        device_id: &DeviceId,
-        state: &ElementState,
-        button: &MouseButton,
-    ) {
+    pub fn process_mouse_input(&mut self, state: &ElementState, button: &MouseButton) {
         match button {
             MouseButton::Right => {
                 self.mouse_right = *state == ElementState::Pressed;

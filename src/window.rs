@@ -15,7 +15,6 @@ pub enum WindowEvents<'a> {
         virtual_keycode: &'a VirtualKeyCode,
     },
     MouseInput {
-        device_id: &'a DeviceId,
         state: &'a ElementState,
         button: &'a MouseButton,
     },
@@ -110,16 +109,9 @@ impl Window {
                                 height: new_inner_size.height,
                             })
                         }
-                        WindowEvent::MouseInput {
-                            device_id,
-                            state,
-                            button,
-                            ..
-                        } => callback(WindowEvents::MouseInput {
-                            device_id,
-                            state,
-                            button,
-                        }),
+                        WindowEvent::MouseInput { state, button, .. } => {
+                            callback(WindowEvents::MouseInput { state, button })
+                        }
                         WindowEvent::CursorMoved { position, .. } => {
                             callback(WindowEvents::MouseMoved { position })
                         }
