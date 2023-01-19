@@ -339,6 +339,143 @@ impl PhongPass {
     }
 }
 
+//             render_pass(device, queue, &mut encoder, self, nodes)
+fn render_pass(
+    device: &wgpu::Device,
+    encoder: &mut wgpu::CommandEncoder,
+    phong_pass: &mut PhongPass,
+    nodes: &[Node],
+    view: &wgpu::TextureView,
+) {
+    let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("Render Pass"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: &view,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                // Set the clear color during redraw
+                // This is basically a background color applied if an object isn't taking up space
+                load: wgpu::LoadOp::Clear(wgpu::Color {
+                    r: 0.1,
+                    g: 0.2,
+                    b: 0.3,
+                    a: 1.0,
+                }),
+                store: true,
+            },
+        })],
+        // Create a depth stencil buffer using the depth texture
+        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+            view: &phong_pass.depth_texture.view,
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Clear(1.0),
+                store: true,
+            }),
+            stencil_ops: None,
+        }),
+    });
+
+    // Allocate buffers for local uniforms
+    if phong_pass.uniform_pool.buffers.len() < nodes.len() {
+        phong_pass.uniform_pool.alloc_buffers(nodes.len(), device);
+    }
+
+    // Loop over the nodes/models in a scene and setup the specific models
+    // local uniform bind group and instance buffers to send to shader
+    // This is separate loop from the render because of Rust ownership
+    // (can prob wrap in block instead to limit mutable use)
+    let mut model_index = 0;
+    for node in nodes {
+        let local_buffer = &phong_pass.uniform_pool.buffers[model_index];
+
+        // We create a bind group for each model's local uniform data
+        // and store it in a hash map to look up later
+        phong_pass
+            .local_bind_groups
+            .entry(model_index)
+            .or_insert_with(|| {
+                log::info!("Creating local bind group");
+                device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("[Phong] Locals"),
+                    layout: &phong_pass.local_bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: local_buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::TextureView(
+                                &node.model.materials[0].diffuse_texture.view,
+                            ),
+                        },
+                    ],
+                })
+            });
+
+        // Setup instance buffer for the model
+        // similar process as above using HashMap
+        phong_pass
+            .instance_buffers
+            .entry(model_index)
+            .or_insert_with(|| {
+                // We condense the matrix properties into a flat array (aka "raw data")
+                // (which is how buffers work - so we can "stride" over chunks)
+                let instance_data = node
+                    .instances
+                    .iter()
+                    .map(Instance::to_raw)
+                    .collect::<Vec<_>>();
+                // Create the instance buffer with our data
+                let instance_buffer =
+                    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Instance Buffer"),
+                        contents: bytemuck::cast_slice(&instance_data),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
+
+                instance_buffer
+            });
+
+        model_index += 1;
+    }
+
+    if let Some(light_model) = &phong_pass.light_model {
+        // Setup lighting pipeline
+        render_pass.set_pipeline(&phong_pass.light_render_pipeline);
+        // Draw/calculate the lighting on models
+        render_pass.draw_light_model(
+            light_model,
+            &phong_pass.global_bind_group,
+            phong_pass
+                .local_bind_groups
+                .get(&1)
+                .expect("No local bind group found for lighting"),
+        );
+    }
+
+    // Setup render pipeline
+    render_pass.set_pipeline(&phong_pass.render_pipeline);
+    render_pass.set_bind_group(0, &phong_pass.global_bind_group, &[]);
+
+    // Render/draw all nodes/models
+    // We reset index here to use again
+    model_index = 0;
+    for node in nodes {
+        // Set the instance buffer unique to the model
+        render_pass.set_vertex_buffer(1, phong_pass.instance_buffers[&model_index].slice(..));
+
+        // Draw all the model instances
+        render_pass.draw_model_instanced(
+            &node.model,
+            0..node.instances.len() as u32,
+            &phong_pass.local_bind_groups[&model_index],
+        );
+
+        model_index += 1;
+    }
+}
+
 impl Pass for PhongPass {
     fn draw(
         &mut self,
@@ -356,132 +493,7 @@ impl Pass for PhongPass {
             label: Some("Render Encoder"),
         });
 
-        // Setup the render pass
-        // see: clear color, depth stencil
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        // Set the clear color during redraw
-                        // This is basically a background color applied if an object isn't taking up space
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
-                        store: true,
-                    },
-                })],
-                // Create a depth stencil buffer using the depth texture
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture.view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: true,
-                    }),
-                    stencil_ops: None,
-                }),
-            });
-
-            // Allocate buffers for local uniforms
-            if self.uniform_pool.buffers.len() < nodes.len() {
-                self.uniform_pool.alloc_buffers(nodes.len(), device);
-            }
-
-            // Loop over the nodes/models in a scene and setup the specific models
-            // local uniform bind group and instance buffers to send to shader
-            // This is separate loop from the render because of Rust ownership
-            // (can prob wrap in block instead to limit mutable use)
-            let mut model_index = 0;
-            for node in nodes {
-                let local_buffer = &self.uniform_pool.buffers[model_index];
-
-                // We create a bind group for each model's local uniform data
-                // and store it in a hash map to look up later
-                self.local_bind_groups
-                    .entry(model_index)
-                    .or_insert_with(|| {
-                        log::info!("Creating local bind group");
-                        device.create_bind_group(&wgpu::BindGroupDescriptor {
-                            label: Some("[Phong] Locals"),
-                            layout: &self.local_bind_group_layout,
-                            entries: &[
-                                wgpu::BindGroupEntry {
-                                    binding: 0,
-                                    resource: local_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 1,
-                                    resource: wgpu::BindingResource::TextureView(
-                                        &node.model.materials[0].diffuse_texture.view,
-                                    ),
-                                },
-                            ],
-                        })
-                    });
-
-                // Setup instance buffer for the model
-                // similar process as above using HashMap
-                self.instance_buffers.entry(model_index).or_insert_with(|| {
-                    // We condense the matrix properties into a flat array (aka "raw data")
-                    // (which is how buffers work - so we can "stride" over chunks)
-                    let instance_data = node
-                        .instances
-                        .iter()
-                        .map(Instance::to_raw)
-                        .collect::<Vec<_>>();
-                    // Create the instance buffer with our data
-                    let instance_buffer =
-                        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("Instance Buffer"),
-                            contents: bytemuck::cast_slice(&instance_data),
-                            usage: wgpu::BufferUsages::VERTEX,
-                        });
-
-                    instance_buffer
-                });
-
-                model_index += 1;
-            }
-
-            if let Some(light_model) = &self.light_model {
-                // Setup lighting pipeline
-                render_pass.set_pipeline(&self.light_render_pipeline);
-                // Draw/calculate the lighting on models
-                render_pass.draw_light_model(
-                    light_model,
-                    &self.global_bind_group,
-                    self.local_bind_groups
-                        .get(&1)
-                        .expect("No local bind group found for lighting"),
-                );
-            }
-
-            // Setup render pipeline
-            render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.global_bind_group, &[]);
-
-            // Render/draw all nodes/models
-            // We reset index here to use again
-            model_index = 0;
-            for node in nodes {
-                // Set the instance buffer unique to the model
-                render_pass.set_vertex_buffer(1, self.instance_buffers[&model_index].slice(..));
-
-                // Draw all the model instances
-                render_pass.draw_model_instanced(
-                    &node.model,
-                    0..node.instances.len() as u32,
-                    &self.local_bind_groups[&model_index],
-                );
-
-                model_index += 1;
-            }
-        }
+        render_pass(device, &mut encoder, self, nodes, &view);
 
         queue.submit(Some(encoder.finish()));
         output.present();
