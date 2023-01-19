@@ -5,7 +5,7 @@ use wgpu::{util::DeviceExt, BindGroupLayout, Device, Queue, Surface};
 use crate::{
     camera::{Camera, CameraUniform, Projection},
     instance::{Instance, InstanceRaw},
-    model::{self, DrawLight, DrawModel, Vertex},
+    model::{self, DrawLight, DrawModel, Model, Vertex},
     node::Node,
     texture,
 };
@@ -74,6 +74,7 @@ pub struct PhongPass {
     pub(crate) projection: Projection,
     // Instances
     instance_buffers: HashMap<usize, wgpu::Buffer>,
+    light_model: Option<Model>,
 }
 
 impl PhongPass {
@@ -83,6 +84,7 @@ impl PhongPass {
         _queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         camera: &Camera,
+        light_model: Option<Model>,
     ) -> PhongPass {
         // Setup the shader
         // We use specific shaders for each pass to define visual effect
@@ -331,6 +333,8 @@ impl PhongPass {
             light_buffer,
             light_render_pipeline,
             instance_buffers,
+
+            light_model,
         }
     }
 }
@@ -401,6 +405,7 @@ impl Pass for PhongPass {
                 self.local_bind_groups
                     .entry(model_index)
                     .or_insert_with(|| {
+                        log::info!("Creating local bind group");
                         device.create_bind_group(&wgpu::BindGroupDescriptor {
                             label: Some("[Phong] Locals"),
                             layout: &self.local_bind_group_layout,
@@ -443,16 +448,18 @@ impl Pass for PhongPass {
                 model_index += 1;
             }
 
-            // Setup lighting pipeline
-            render_pass.set_pipeline(&self.light_render_pipeline);
-            // Draw/calculate the lighting on models
-            render_pass.draw_light_model(
-                &nodes[1].model,
-                &self.global_bind_group,
-                self.local_bind_groups
-                    .get(&1)
-                    .expect("No local bind group found for lighting"),
-            );
+            if let Some(light_model) = &self.light_model {
+                // Setup lighting pipeline
+                render_pass.set_pipeline(&self.light_render_pipeline);
+                // Draw/calculate the lighting on models
+                render_pass.draw_light_model(
+                    light_model,
+                    &self.global_bind_group,
+                    self.local_bind_groups
+                        .get(&1)
+                        .expect("No local bind group found for lighting"),
+                );
+            }
 
             // Setup render pipeline
             render_pass.set_pipeline(&self.render_pipeline);

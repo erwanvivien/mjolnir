@@ -27,6 +27,7 @@ use crate::{
     camera::{Camera, CameraController},
     model::Keyframes,
     pass::phong::{Locals, PhongConfig},
+    primitives::{sphere::generate_sphere, PrimitiveMesh},
     window::Window,
 };
 use crate::{instance::Instance, window::WindowEvents};
@@ -66,7 +67,19 @@ impl State {
             ambient: Default::default(),
             wireframe: false,
         };
-        let pass = PhongPass::new(&pass_config, &ctx.device, &ctx.queue, &ctx.config, &camera);
+
+        let (sphere_vertices, sphere_indices) = generate_sphere(0.5f32, 36, 18);
+        let light_model =
+            PrimitiveMesh::new(&ctx.device, &ctx.queue, &sphere_vertices, &sphere_indices).await;
+
+        let pass = PhongPass::new(
+            &pass_config,
+            &ctx.device,
+            &ctx.queue,
+            &ctx.config,
+            &camera,
+            Some(light_model.model),
+        );
 
         // Create the 3D objects!
         // Load 3D model from disk or as a HTTP request (for web support)
