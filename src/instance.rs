@@ -4,12 +4,18 @@
 pub struct Instance {
     pub position: cgmath::Vector3<f32>,
     pub rotation: cgmath::Quaternion<f32>,
+    pub scale: cgmath::Vector3<f32>,
 }
 
 impl Instance {
     pub fn to_raw(&self) -> InstanceRaw {
-        let model =
-            cgmath::Matrix4::from_translation(self.position) * cgmath::Matrix4::from(self.rotation);
+        let translation = cgmath::Matrix4::from_translation(self.position);
+        let rotation = cgmath::Matrix4::from(self.rotation);
+        let scale =
+            cgmath::Matrix4::from_nonuniform_scale(self.scale.x, self.scale.y, self.scale.z);
+
+        let model = (translation * rotation) * scale;
+
         InstanceRaw {
             model: model.into(),
             normal: cgmath::Matrix3::from(self.rotation).into(),

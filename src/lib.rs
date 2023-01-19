@@ -94,12 +94,35 @@ impl State {
             .map(|z| {
                 let z = SPACE_BETWEEN * (z as f32);
                 let position = cgmath::Vector3 { x: z, y: 1.0, z };
+                let scale = cgmath::Vector3::new(1f32, 1f32, 1f32);
                 let rotation = if position.is_zero() {
                     cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
                 } else {
                     cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
                 };
-                Instance { position, rotation }
+                Instance {
+                    position,
+                    rotation,
+                    scale,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let car_instances = (0..1)
+            .map(|z| {
+                let z = SPACE_BETWEEN * (z as f32);
+                let position = cgmath::Vector3 { x: z, y: 1.0, z };
+                let scale = cgmath::Vector3::new(1f32, 1f32, 1f32);
+                let rotation = if position.is_zero() {
+                    cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
+                } else {
+                    cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
+                };
+                Instance {
+                    position,
+                    rotation,
+                    scale,
+                }
             })
             .collect::<Vec<_>>();
 
@@ -112,7 +135,7 @@ impl State {
                 lights: [0.0, 0.0, 0.0, 0.0],
             },
             model: ferris_model,
-            instances: ferris_instances.clone(),
+            instances: ferris_instances,
         };
 
         let car_node = Node {
@@ -124,7 +147,7 @@ impl State {
                 lights: [0.0, 0.0, 0.0, 0.0],
             },
             model: car_model,
-            instances: ferris_instances,
+            instances: car_instances,
         };
 
         // Put all our nodes into an Vector to loop over later
