@@ -129,10 +129,10 @@ impl State {
         let ferris_node = Node {
             parent: 0,
             locals: Locals {
-                position: [0.0, 0.0, -0.2, 0.0],
-                color: [0.0, 0.0, 1.0, 1.0],
-                normal: [0.0, 0.0, 0.0, 0.0],
-                lights: [0.0, 0.0, 0.0, 0.0],
+                position: [0f32, 0f32, -0.2f32, 0f32],
+                color: [0f32; 4], // Color is not used yet
+                normal: [0f32; 4],
+                lights: [0f32; 4],
             },
             model: ferris_model,
             instances: ferris_instances,
@@ -141,10 +141,10 @@ impl State {
         let car_node = Node {
             parent: 0,
             locals: Locals {
-                position: [0.0, 0.0, 0.0, 0.0],
-                color: [0.0, 0.0, 1.0, 1.0],
-                normal: [0.0, 0.0, 0.0, 0.0],
-                lights: [0.0, 0.0, 0.0, 0.0],
+                position: [0f32; 4],
+                color: [0f32; 4], // Color is not used yet
+                normal: [0f32; 4],
+                lights: [0f32; 4],
             },
             model: car_model,
             instances: car_instances,
