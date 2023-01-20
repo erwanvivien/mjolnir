@@ -185,7 +185,6 @@ pub async fn load_model_obj(
         meshes,
         materials,
         animations,
-        particles: Vec::new(),
     })
 }
 
@@ -364,7 +363,6 @@ pub async fn load_model_gltf(
         meshes,
         materials,
         animations: animation_clips,
-        particles: Vec::new(),
     })
 }
 
@@ -559,6 +557,5 @@ pub async fn load_model_glb(
         meshes,
         materials,
         animations: animation_clips,
-        particles: Vec::new(),
     })
 }

@@ -71,13 +71,10 @@ pub struct AnimationClip {
     pub timestamps: Vec<f32>,
 }
 
-pub struct Particle {}
-
 pub struct Model {
     pub meshes: Vec<Mesh>,
     pub materials: Vec<Material>,
     pub animations: Vec<AnimationClip>,
-    pub particles: Vec<Particle>,
 }
 
 pub trait DrawModel<'a> {

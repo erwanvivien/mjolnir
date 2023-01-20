@@ -5,7 +5,6 @@ use crate::{instance::Instance, model, pass::phong::Locals};
 pub struct Node {
     // ID of parent Node
     pub parent: u32,
-    // local: Matrix?
     // Local position of model (for relative calculations)
     pub locals: Locals,
     // The vertex buffers and texture data
