@@ -95,7 +95,7 @@ fn vs_main(
 @group(1) @binding(1)
 var t_diffuse: texture_2d<f32>;
 // This grabs the sampler from the Global uniform
-@group(0)@binding(2)
+@group(0) @binding(2)
 var s_diffuse: sampler;
 
 @fragment

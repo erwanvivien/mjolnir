@@ -1,9 +1,11 @@
 use std::ops::Range;
 
+use wgpu::BindGroup;
+
 use crate::texture;
 
 pub trait Vertex {
-    fn desc<'a>() -> wgpu::VertexBufferLayout<'a>;
+    fn desc() -> wgpu::VertexBufferLayout<'static>;
 }
 
 #[repr(C)]
@@ -14,30 +16,33 @@ pub struct ModelVertex {
     pub normal: [f32; 3],
 }
 
+impl ModelVertex {
+    const VERTEX_BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+        array_stride: std::mem::size_of::<ModelVertex>() as wgpu::BufferAddress,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &[
+            wgpu::VertexAttribute {
+                offset: 0,
+                shader_location: 0,
+                format: wgpu::VertexFormat::Float32x3,
+            },
+            wgpu::VertexAttribute {
+                offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                shader_location: 1,
+                format: wgpu::VertexFormat::Float32x2,
+            },
+            wgpu::VertexAttribute {
+                offset: std::mem::size_of::<[f32; 5]>() as wgpu::BufferAddress,
+                shader_location: 2,
+                format: wgpu::VertexFormat::Float32x3,
+            },
+        ],
+    };
+}
+
 impl Vertex for ModelVertex {
-    fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
-        use std::mem;
-        wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<ModelVertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 5]>() as wgpu::BufferAddress,
-                    shader_location: 2,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-            ],
-        }
+    fn desc() -> wgpu::VertexBufferLayout<'static> {
+        Self::VERTEX_BUFFER_LAYOUT
     }
 }
 
@@ -91,11 +96,12 @@ pub trait DrawModel<'a> {
     );
 
     fn draw_model(&mut self, model: &'a Model, local_bind_group: &'a wgpu::BindGroup);
+
     fn draw_model_instanced(
         &mut self,
         model: &'a Model,
         instances: Range<u32>,
-        local_bind_group: &'a wgpu::BindGroup,
+        local_bind_group: &Vec<&'a wgpu::BindGroup>,
     );
 }
 
@@ -126,18 +132,19 @@ where
     }
 
     fn draw_model(&mut self, model: &'b Model, local_bind_group: &'b wgpu::BindGroup) {
-        self.draw_model_instanced(model, 0..1, local_bind_group);
+        self.draw_model_instanced(model, 0..1, &vec![local_bind_group]);
     }
 
     fn draw_model_instanced(
         &mut self,
         model: &'b Model,
         instances: Range<u32>,
-        local_bind_group: &'b wgpu::BindGroup,
+        local_bind_group: &Vec<&'b BindGroup>,
     ) {
         for mesh in &model.meshes {
             let material = &model.materials[mesh.material];
-            self.draw_mesh_instanced(mesh, material, instances.clone(), local_bind_group);
+            let material_bind_group = local_bind_group[mesh.material];
+            self.draw_mesh_instanced(mesh, material, instances.clone(), &material_bind_group);
         }
     }
 }

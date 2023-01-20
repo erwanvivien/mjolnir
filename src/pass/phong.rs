@@ -58,7 +58,7 @@ pub struct PhongPass {
     pub global_bind_group: wgpu::BindGroup,
     pub local_bind_group_layout: BindGroupLayout,
     // pub local_uniform_buffer: wgpu::Buffer,
-    local_bind_groups: HashMap<usize, wgpu::BindGroup>,
+    local_bind_groups: HashMap<usize, Vec<wgpu::BindGroup>>,
     pub uniform_pool: UniformPool,
     // Textures
     pub depth_texture: texture::Texture,
@@ -393,23 +393,28 @@ fn render_pass(
             .local_bind_groups
             .entry(model_index)
             .or_insert_with(|| {
-                log::info!("Creating local bind group");
-                device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("[Phong] Locals"),
-                    layout: &phong_pass.local_bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: local_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::TextureView(
-                                &node.model.materials[0].diffuse_texture.view,
-                            ),
-                        },
-                    ],
-                })
+                (0..node.model.materials.len())
+                    .map(|mesh_index| {
+                        log::info!("Creating local bind group for model: {}", model_index);
+                        log::info!("Material {}/{}", mesh_index, node.model.materials.len());
+                        device.create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("[Phong] Locals"),
+                            layout: &phong_pass.local_bind_group_layout,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: local_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::TextureView(
+                                        &node.model.materials[mesh_index].diffuse_texture.view,
+                                    ),
+                                },
+                            ],
+                        })
+                    })
+                    .collect::<Vec<_>>()
             });
 
         // Setup instance buffer for the model
@@ -444,10 +449,10 @@ fn render_pass(
         render_pass.draw_light_model(
             light_model,
             &phong_pass.global_bind_group,
-            phong_pass
+            &phong_pass
                 .local_bind_groups
-                .get(&1)
-                .expect("No local bind group found for lighting"),
+                .get(&0)
+                .expect("No local bind group found for lighting")[0],
         );
     }
 
@@ -461,11 +466,23 @@ fn render_pass(
         // Set the instance buffer unique to the model
         render_pass.set_vertex_buffer(1, phong_pass.instance_buffers[&model_index].slice(..));
 
+        let model_bind_group = phong_pass.local_bind_groups[&model_index]
+            .iter()
+            .map(|bind_group| bind_group)
+            .collect::<Vec<_>>();
+
+        #[cfg(debug_assertions)]
+        log::debug!(
+            "Drawing model#{} with {} materials",
+            model_index,
+            &model_bind_group.len()
+        );
+
         // Draw all the model instances
         render_pass.draw_model_instanced(
             &node.model,
             0..node.instances.len() as u32,
-            &phong_pass.local_bind_groups[&model_index],
+            &model_bind_group,
         );
     }
 }
