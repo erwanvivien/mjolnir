@@ -415,8 +415,10 @@ fn render_pass(
             .or_insert_with(|| {
                 (0..node.model.materials.len())
                     .map(|mesh_index| {
-                        log::info!("Creating local bind group for model: {}", model_index);
-                        log::info!("Material {}/{}", mesh_index, node.model.materials.len());
+                        #[cfg(debug_assertions)]
+                        log::debug!("Creating local bind group for model: {}", model_index);
+                        #[cfg(debug_assertions)]
+                        log::debug!("Material {}/{}", mesh_index, node.model.materials.len());
                         device.create_bind_group(&wgpu::BindGroupDescriptor {
                             label: Some("[Phong] Locals"),
                             layout: &phong_pass.local_bind_group_layout,
