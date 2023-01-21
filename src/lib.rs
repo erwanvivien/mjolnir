@@ -17,12 +17,14 @@ mod instance;
 mod instant;
 mod model;
 mod node;
+mod particle;
 mod pass;
 mod primitives;
 mod resources;
 mod texture;
 mod window;
 
+use crate::particle::ParticleSystem;
 use crate::{
     camera::{Camera, CameraController},
     model::Keyframes,
@@ -44,6 +46,7 @@ struct State {
     camera_controller: CameraController,
     // The 3D models in the scene (as Nodes)
     nodes: Vec<Node>,
+    particle_system: Vec<ParticleSystem>,
     // Animation
     time: Instant,
 }
@@ -103,16 +106,18 @@ impl State {
         const SPACE_BETWEEN: f32 = 3.0;
         const NUM_INSTANCES_PER_ROW: u32 = 10;
         // More "manual" placement as an example
-        let ferris_instances = (0..1)
+        let ferris_instances = (0..2)
             .map(|z| {
-                let z = SPACE_BETWEEN * (z as f32);
-                let position = cgmath::Vector3 { x: z, y: 1.0, z };
-                let scale = cgmath::Vector3::new(1f32, 1f32, 1f32);
-                let rotation = if position.is_zero() {
-                    cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
-                } else {
-                    cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
+                let position = cgmath::Vector3 {
+                    x: if z == 0 { 0.3 } else { -0.3 },
+                    y: 1.2,
+                    z: -0.2,
                 };
+                let scale = cgmath::Vector3::new(0.5f32, 0.5f32, 0.5f32);
+                let rotation = cgmath::Quaternion::from_axis_angle(
+                    cgmath::Vector3::unit_x(),
+                    cgmath::Deg(if z == 0 { 0f32 } else { -25.0 }),
+                );
                 Instance {
                     position,
                     rotation,
@@ -126,11 +131,10 @@ impl State {
                 let z = SPACE_BETWEEN * (z as f32);
                 let position = cgmath::Vector3 { x: z, y: 1.0, z };
                 let scale = cgmath::Vector3::new(1f32, 1f32, 1f32);
-                let rotation = if position.is_zero() {
-                    cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
-                } else {
-                    cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
-                };
+                let rotation = cgmath::Quaternion::from_axis_angle(
+                    cgmath::Vector3::unit_y(),
+                    cgmath::Deg(0.0),
+                );
                 Instance {
                     position,
                     rotation,
@@ -166,6 +170,23 @@ impl State {
         // Put all our nodes into an Vector to loop over later
         let nodes = vec![ferris_node, car_node];
 
+        let (sphere_vertices, sphere_indices) = generate_sphere(0.5f32, 36, 18);
+        let light_model =
+            PrimitiveMesh::new(&ctx.device, &ctx.queue, &sphere_vertices, &sphere_indices).await;
+
+        // Create a particle system
+        let particle_system = vec![ParticleSystem::new(
+            &ctx.device,
+            light_model.model,
+            Locals {
+                position: [0f32; 4],
+                color: [0f32; 4], // Color is not used yet
+                normal: [0f32; 4],
+                lights: [0f32; 4],
+            },
+            100,
+        )];
+
         // Clear color used for mouse input interaction
         let time = Instant::now();
 
@@ -176,6 +197,7 @@ impl State {
             camera,
             camera_controller,
             nodes,
+            particle_system,
             time,
         }
     }
@@ -243,7 +265,13 @@ impl State {
             bytemuck::cast_slice(&[self.pass.light_uniform]),
         );
 
-        // println!("Time elapsed: {:?}", &self.time.elapsed());
+        // Update the particle system
+        for particle in &mut self.particle_system {
+            particle.update(dt, &self.ctx.queue);
+        }
+
+        #[cfg(debug_assertions)]
+        log::debug!("Time elapsed: {:?}", &self.time.elapsed());
 
         // Update local uniforms
         let current_time = &self.time.elapsed().as_secs_f32();
@@ -297,6 +325,7 @@ impl State {
             &self.ctx.device,
             &self.ctx.queue,
             &self.nodes,
+            &self.particle_system,
         ) {
             log::error!("Error in draw: {:?}", err);
         }

@@ -1,6 +1,6 @@
 use wgpu::{Device, Queue, Surface};
 
-use crate::node::Node;
+use crate::{node::Node, particle::ParticleSystem};
 
 pub mod phong;
 
@@ -11,6 +11,7 @@ pub trait Pass {
         device: &Device,
         queue: &Queue,
         nodes: &[Node],
+        particle_system: &[ParticleSystem],
     ) -> Result<(), wgpu::SurfaceError>;
 }
 

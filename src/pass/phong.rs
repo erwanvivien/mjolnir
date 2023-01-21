@@ -7,6 +7,7 @@ use crate::{
     instance::{Instance, InstanceRaw},
     model::{self, DrawLight, DrawModel, Model, Vertex},
     node::Node,
+    particle::ParticleSystem,
     texture,
 };
 
@@ -53,7 +54,7 @@ pub struct PhongConfig {
 
 pub struct PhongPass {
     // Uniforms
-    pub global_bind_group_layout: BindGroupLayout,
+    // pub global_bind_group_layout: BindGroupLayout,
     pub global_uniform_buffer: wgpu::Buffer,
     pub global_bind_group: wgpu::BindGroup,
     pub local_bind_group_layout: BindGroupLayout,
@@ -78,6 +79,10 @@ pub struct PhongPass {
 }
 
 impl PhongPass {
+    const LIGHT_SIZE: wgpu::BufferAddress = mem::size_of::<LightUniform>() as wgpu::BufferAddress;
+    const GLOBAL_SIZE: wgpu::BufferAddress = mem::size_of::<Globals>() as wgpu::BufferAddress;
+    const LOCAL_SIZE: wgpu::BufferAddress = mem::size_of::<Locals>() as wgpu::BufferAddress;
+
     pub fn new(
         phong_config: &PhongConfig,
         device: &wgpu::Device,
@@ -86,19 +91,9 @@ impl PhongPass {
         camera: &Camera,
         light_model: Option<Model>,
     ) -> PhongPass {
-        // Setup the shader
-        // We use specific shaders for each pass to define visual effect
-        // and also to have the right shader for the uniforms we pass
-        let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Normal Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../shader.wgsl").into()),
-        });
-
         // Setup global uniforms
         // Global bind group layout
-        let light_size = mem::size_of::<LightUniform>() as wgpu::BufferAddress;
-        let global_size = mem::size_of::<Globals>() as wgpu::BufferAddress;
-        let global_bind_group_layout =
+        let global_bind_group_layout = {
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("[Phong] Globals"),
                 entries: &[
@@ -109,7 +104,7 @@ impl PhongPass {
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
-                            min_binding_size: wgpu::BufferSize::new(global_size),
+                            min_binding_size: wgpu::BufferSize::new(PhongPass::GLOBAL_SIZE),
                         },
                         count: None,
                     },
@@ -120,7 +115,7 @@ impl PhongPass {
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
-                            min_binding_size: wgpu::BufferSize::new(light_size),
+                            min_binding_size: wgpu::BufferSize::new(PhongPass::LIGHT_SIZE),
                         },
                         count: None,
                     },
@@ -132,15 +127,9 @@ impl PhongPass {
                         count: None,
                     },
                 ],
-            });
+            })
+        };
 
-        // Global uniform buffer
-        let global_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("[Phong] Globals"),
-            size: global_size,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
         // Create light uniforms and setup buffer for them
         let light_uniform = LightUniform {
             position: [2.0, 2.0, 2.0],
@@ -148,42 +137,54 @@ impl PhongPass {
             color: [1.0, 1.0, 1.0],
             _padding2: 0,
         };
-        let light_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("[Phong] Lights"),
-            contents: bytemuck::cast_slice(&[light_uniform]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-        // We also need a sampler for our textures
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("[Phong] sampler"),
-            min_filter: wgpu::FilterMode::Linear,
-            mag_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
-        });
+
+        let (global_uniform_buffer, light_buffer, global_bind_group) = {
+            // Global uniform buffer
+            let global_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("[Phong] Globals"),
+                size: PhongPass::GLOBAL_SIZE,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            let light_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("[Phong] Lights"),
+                contents: bytemuck::cast_slice(&[light_uniform]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+            // We also need a sampler for our textures
+            let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("[Phong] sampler"),
+                min_filter: wgpu::FilterMode::Linear,
+                mag_filter: wgpu::FilterMode::Linear,
+                ..Default::default()
+            });
+
+            let global_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("[Phong] Globals"),
+                layout: &global_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: global_uniform_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: light_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&sampler),
+                    },
+                ],
+            });
+
+            (global_uniform_buffer, light_buffer, global_bind_group)
+        };
         // Combine the global uniform, the lights, and the texture sampler into one bind group
-        let global_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("[Phong] Globals"),
-            layout: &global_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: global_uniform_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: light_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-            ],
-        });
 
         // Setup local uniforms
         // Local bind group layout
-        let local_size = mem::size_of::<Locals>() as wgpu::BufferAddress;
-        let local_bind_group_layout =
+        let local_bind_group_layout = {
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("[Phong] Locals"),
                 entries: &[
@@ -194,7 +195,7 @@ impl PhongPass {
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
-                            min_binding_size: wgpu::BufferSize::new(local_size),
+                            min_binding_size: wgpu::BufferSize::new(PhongPass::LOCAL_SIZE),
                         },
                         count: None,
                     },
@@ -210,65 +211,82 @@ impl PhongPass {
                         count: None,
                     },
                 ],
+            })
+        };
+        // Setup the render pipeline
+        let pipeline_layout = {
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("[Phong] Pipeline"),
+                bind_group_layouts: &[&global_bind_group_layout, &local_bind_group_layout],
+                push_constant_ranges: &[],
+            })
+        };
+
+        let (depth_stencil, primitive, multisample) = {
+            // Enable/disable wireframe mode
+            let topology = if phong_config.wireframe {
+                wgpu::PrimitiveTopology::LineList
+            } else {
+                wgpu::PrimitiveTopology::TriangleList
+            };
+
+            let depth_stencil = Some(wgpu::DepthStencilState {
+                format: texture::Texture::DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::LessEqual,
+                stencil: Default::default(),
+                bias: Default::default(),
             });
 
-        // Setup the render pipeline
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("[Phong] Pipeline"),
-            bind_group_layouts: &[&global_bind_group_layout, &local_bind_group_layout],
-            push_constant_ranges: &[],
-        });
-        let vertex_buffers = [model::ModelVertex::desc(), InstanceRaw::desc()];
-        let depth_stencil = Some(wgpu::DepthStencilState {
-            format: texture::Texture::DEPTH_FORMAT,
-            depth_write_enabled: true,
-            depth_compare: wgpu::CompareFunction::LessEqual,
-            stencil: Default::default(),
-            bias: Default::default(),
-        });
+            // let _color_format = texture::Texture::DEPTH_FORMAT;
+            let primitive = wgpu::PrimitiveState {
+                cull_mode: Some(wgpu::Face::Back),
+                topology,
+                ..Default::default()
+            };
+            let multisample = wgpu::MultisampleState {
+                ..Default::default()
+            };
 
-        // Enable/disable wireframe mode
-        let topology = if phong_config.wireframe {
-            wgpu::PrimitiveTopology::LineList
-        } else {
-            wgpu::PrimitiveTopology::TriangleList
+            (depth_stencil, primitive, multisample)
         };
 
-        let primitive = wgpu::PrimitiveState {
-            cull_mode: Some(wgpu::Face::Back),
-            topology,
-            ..Default::default()
-        };
-        let multisample = wgpu::MultisampleState {
-            ..Default::default()
-        };
-        let _color_format = texture::Texture::DEPTH_FORMAT;
+        let render_pipeline = {
+            let vertex_buffers = [model::ModelVertex::desc(), InstanceRaw::desc()];
 
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("[Phong] Pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader_module,
-                entry_point: "vs_main",
-                buffers: &vertex_buffers,
-            },
-            primitive,
-            depth_stencil: depth_stencil.clone(),
-            multisample,
-            fragment: Some(wgpu::FragmentState {
-                module: &shader_module,
-                entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
-                    blend: Some(wgpu::BlendState {
-                        alpha: wgpu::BlendComponent::REPLACE,
-                        color: wgpu::BlendComponent::REPLACE,
-                    }),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            multiview: None,
-        });
+            // Setup the shader
+            // We use specific shaders for each pass to define visual effect
+            // and also to have the right shader for the uniforms we pass
+            let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("Normal Shader"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("../shader.wgsl").into()),
+            });
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("[Phong] Pipeline"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader_module,
+                    entry_point: "vs_main",
+                    buffers: &vertex_buffers,
+                },
+                primitive,
+                depth_stencil: depth_stencil.clone(),
+                multisample,
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader_module,
+                    entry_point: "fs_main",
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: config.format,
+                        blend: Some(wgpu::BlendState {
+                            alpha: wgpu::BlendComponent::REPLACE,
+                            color: wgpu::BlendComponent::REPLACE,
+                        }),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                multiview: None,
+            })
+        };
 
         // Create depth texture
         let depth_texture = texture::Texture::create_depth_texture(device, config, "depth_texture");
@@ -280,12 +298,12 @@ impl PhongPass {
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_view_proj(camera, &projection);
 
-        let light_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Light Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../light.wgsl").into()),
-        });
+        let light_render_pipeline = {
+            let light_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("Light Shader"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("../light.wgsl").into()),
+            });
 
-        let light_render_pipeline =
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("[Phong] Light Pipeline"),
                 layout: Some(&pipeline_layout),
@@ -310,15 +328,15 @@ impl PhongPass {
                     })],
                 }),
                 multiview: None,
-            });
+            })
+        };
 
         // Create instance buffer
         let instance_buffers = HashMap::new();
-
-        let uniform_pool = UniformPool::new("[Phong] Locals", local_size);
+        let uniform_pool = UniformPool::new("[Phong] Locals", PhongPass::LOCAL_SIZE);
 
         PhongPass {
-            global_bind_group_layout,
+            // global_bind_group_layout,
             global_uniform_buffer,
             global_bind_group,
             local_bind_group_layout,
@@ -345,6 +363,7 @@ fn render_pass(
     encoder: &mut wgpu::CommandEncoder,
     phong_pass: &mut PhongPass,
     nodes: &[Node],
+    particle_system: &[ParticleSystem],
     view: &wgpu::TextureView,
 ) {
     let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -384,6 +403,7 @@ fn render_pass(
     // local uniform bind group and instance buffers to send to shader
     // This is separate loop from the render because of Rust ownership
     // (can prob wrap in block instead to limit mutable use)
+    // TODO: Change model_index to node_index
     for (model_index, node) in nodes.iter().enumerate() {
         let local_buffer = &phong_pass.uniform_pool.buffers[model_index];
 
@@ -494,6 +514,7 @@ impl Pass for PhongPass {
         device: &Device,
         queue: &Queue,
         nodes: &[Node],
+        particle_system: &[ParticleSystem],
     ) -> Result<(), wgpu::SurfaceError> {
         let output = surface.get_current_texture()?;
         let view = output
@@ -504,7 +525,7 @@ impl Pass for PhongPass {
             label: Some("Render Encoder"),
         });
 
-        render_pass(device, &mut encoder, self, nodes, &view);
+        render_pass(device, &mut encoder, self, nodes, particle_system, &view);
 
         queue.submit(Some(encoder.finish()));
         output.present();
