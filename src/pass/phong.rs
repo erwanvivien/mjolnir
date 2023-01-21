@@ -259,7 +259,7 @@ impl PhongPass {
             // and also to have the right shader for the uniforms we pass
             let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("Normal Shader"),
-                source: wgpu::ShaderSource::Wgsl(include_str!("../shader.wgsl").into()),
+                source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/model.wgsl").into()),
             });
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("[Phong] Pipeline"),
@@ -301,7 +301,7 @@ impl PhongPass {
         let light_render_pipeline = {
             let light_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("Light Shader"),
-                source: wgpu::ShaderSource::Wgsl(include_str!("../light.wgsl").into()),
+                source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/light.wgsl").into()),
             });
 
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
