@@ -61,7 +61,8 @@ impl State {
         let ctx = GraphicsContext::new(window).await;
 
         // Setup the camera and it's initial position
-        let camera = camera::Camera::new((0.0, 5.0, 10.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
+
+        let camera = camera::Camera::new((-5f32, 0f32, 0f32), cgmath::Deg(0f32), cgmath::Deg(0f32));
         let camera_controller = camera::CameraController::new(4.0, 0.4);
 
         // Initialize the pass
@@ -114,7 +115,7 @@ impl State {
             .map(|z| {
                 let position = cgmath::Vector3 {
                     x: if z == 0 { 0.3 } else { -0.3 },
-                    y: 1.2,
+                    y: 0.2,
                     z: -0.2,
                 };
                 let scale = cgmath::Vector3::new(0.5f32, 0.5f32, 0.5f32);
@@ -133,7 +134,7 @@ impl State {
         let car_instances = (0..1)
             .map(|z| {
                 let z = SPACE_BETWEEN * (z as f32);
-                let position = cgmath::Vector3 { x: z, y: 1.0, z };
+                let position = cgmath::Vector3 { x: z, y: 0f32, z };
                 let scale = cgmath::Vector3::new(1f32, 1f32, 1f32);
                 let rotation = cgmath::Quaternion::from_axis_angle(
                     cgmath::Vector3::unit_y(),
@@ -175,24 +176,7 @@ impl State {
         let nodes = vec![ferris_node, car_node];
 
         let instances = (0..100)
-            .map(|i| {
-                let position = cgmath::Vector3 {
-                    x: i as f32,
-                    y: 0f32,
-                    z: 0f32,
-                };
-                let scale = cgmath::Vector3::new(0.5f32, 0.5f32, 0.5f32);
-                let rotation = cgmath::Quaternion::from_axis_angle(
-                    cgmath::Vector3::unit_x(),
-                    cgmath::Deg(0f32),
-                );
-
-                Instance {
-                    position,
-                    rotation,
-                    scale,
-                }
-            })
+            .map(|i| ParticleSystem::new_particle())
             .collect::<Vec<_>>();
 
         let particle_node = Node {
