@@ -139,9 +139,14 @@ impl ParticleSystem {
             ParticleType::Rotation((angle, center))
         };
 
+        let lifetime_factor = match ty {
+            ParticleType::Movement(_) => 0.8f32,
+            ParticleType::Rotation(_) => 2f32,
+            ParticleType::Default => 1f32,
+        };
         Particle {
             instance: Self::new_instance(&ty),
-            lifetime: (0f32, rand::random::<f32>()),
+            lifetime: (0f32, rand::random::<f32>() * lifetime_factor),
             ty,
         }
     }
@@ -205,7 +210,7 @@ impl ParticleSystem {
                         instance.position.y += delta * (-instance.position.z).sqrt();
                     }
                     if is_bottom || is_back {
-                        instance.position += *direction * delta * 8f32;
+                        instance.position += *direction * delta * 4f32;
                     }
                     instance.position.y = instance.position.y.max(-Self::RADIUS);
                 }
@@ -214,7 +219,7 @@ impl ParticleSystem {
 
                     let (sin, cos) = angle.sin_cos();
                     instance.position = cgmath::Vector3 {
-                        x: center.x,
+                        x: instance.position.x + f32::signum(center.x) * delta * 0.1f32,
                         y: center.y + Self::RADIUS * cos,
                         z: center.z + Self::RADIUS * sin,
                     };
@@ -224,10 +229,15 @@ impl ParticleSystem {
 
             let life_percent = (lifetime.0 / lifetime.1) * PI;
             let scale = life_percent.sin();
+            let scale_factor = match ty {
+                ParticleType::Movement(_) => 0.05f32,
+                ParticleType::Rotation(_) => 0.01f32,
+                ParticleType::Default => 0f32,
+            };
             instance.scale = cgmath::Vector3::new(
-                scale * 0.015 + 0.01,
-                scale * 0.015 + 0.01,
-                scale * 0.015 + 0.01,
+                scale * scale_factor + 0.01,
+                scale * scale_factor + 0.01,
+                scale * scale_factor + 0.01,
             );
         }
 
