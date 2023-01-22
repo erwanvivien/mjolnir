@@ -25,6 +25,7 @@ mod texture;
 mod window;
 
 use crate::particle::ParticleSystem;
+use crate::primitives::plane;
 use crate::{
     camera::{Camera, CameraController},
     model::Keyframes,
@@ -102,6 +103,14 @@ impl State {
         let particle_model = resources::load_model(Path::new("Nuage.glb"), &ctx.device, &ctx.queue)
             .await
             .unwrap();
+        // let (particle_vertices, particle_indices) = generate_sphere(0.5f32, 36, 18);
+        // let particle_model = PrimitiveMesh::new(
+        //     &ctx.device,
+        //     &ctx.queue,
+        //     &particle_vertices,
+        //     &particle_indices,
+        // )
+        // .await;
 
         // Create instances for each object with locational data (position + rotation)
         // Renderer currently defaults to using instances. Want one object? Pass a Vec of 1 instance.
@@ -172,10 +181,30 @@ impl State {
             instances: car_instances,
         };
 
-        // Put all our nodes into an Vector to loop over later
-        let nodes = vec![ferris_node, car_node];
+        let plane = plane::new(&ctx.device, &ctx.queue, 1f32).await.model;
+        let plane_node = Node {
+            parent: 0,
+            locals: Locals {
+                position: [0f32, 0f32, -1.3f32, 0f32],
+                color: [0f32; 4], // Color is not used yet
+                normal: [0f32; 4],
+                lights: [0f32; 4],
+            },
+            model: plane,
+            instances: vec![Instance {
+                position: cgmath::Vector3::new(0f32, 0f32, 0f32),
+                rotation: cgmath::Quaternion::from_axis_angle(
+                    cgmath::Vector3::unit_x(),
+                    cgmath::Deg(-90f32),
+                ),
+                scale: cgmath::Vector3::new(5f32, 5f32, 1f32),
+            }],
+        };
 
-        let instances = (0..500)
+        // Put all our nodes into an Vector to loop over later
+        let nodes = vec![ferris_node, car_node, plane_node];
+
+        let instances = (0..1000)
             .map(|_| ParticleSystem::new_particle())
             .collect::<Vec<_>>();
 

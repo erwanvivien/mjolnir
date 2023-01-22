@@ -17,6 +17,7 @@ pub struct Particle {
     pub instance: Instance,
 
     pub lifetime: (f32, f32),
+    direction: Vector3<f32>,
 }
 
 impl Particle {
@@ -27,9 +28,16 @@ impl Particle {
 
 impl From<Instance> for Particle {
     fn from(instance: Instance) -> Self {
+        let direction = Vector3::new(
+            (rand::random::<f32>() * 2f32 - 1f32) * 0.2f32,
+            (rand::random::<f32>() * 2f32 - 1f32) * 0.2f32,
+            -1f32,
+        );
+
         Self {
             instance,
             lifetime: (0f32, rand::random::<f32>()),
+            direction,
         }
     }
 }
@@ -50,7 +58,7 @@ pub struct ParticleSystem {
 const PARTICLE_SYSTEM_ID: AtomicU32 = AtomicU32::new(0);
 
 impl ParticleSystem {
-    const RADIUS: f32 = 0.3f32;
+    const RADIUS: f32 = 0.25f32;
     const DIAMETER: f32 = Self::RADIUS * 2f32;
 
     const POS_WHEEL_BACK_LEFT: Vector3<f32> = cgmath::Vector3 {
@@ -65,7 +73,7 @@ impl ParticleSystem {
 
     pub fn new_particle() -> Instance {
         let angle = rand::random::<f32>() * 2f32 * std::f32::consts::PI;
-        let (sin, cos) = angle.sin_cos();
+        // let (sin, cos) = angle.sin_cos();
 
         let center = if rand::random::<bool>() {
             Self::POS_WHEEL_BACK_LEFT
@@ -73,10 +81,15 @@ impl ParticleSystem {
             Self::POS_WHEEL_BACK_RIGHT
         };
 
+        let center = cgmath::Vector3 {
+            y: center.y - Self::RADIUS,
+            ..center
+        };
+
         let position = cgmath::Vector3 {
             x: center.x,
-            y: center.y + Self::RADIUS * cos,
-            z: center.z + Self::RADIUS * sin,
+            y: center.y, // + Self::RADIUS * cos,
+            z: center.z, // + Self::RADIUS * sin,
         };
 
         // Generate random scale
@@ -135,7 +148,12 @@ impl ParticleSystem {
                 *particle = Self::new_particle().into();
             }
 
-            let Particle { instance, lifetime } = particle;
+            let Particle {
+                instance,
+                lifetime,
+                direction,
+            } = particle;
+
             lifetime.0 += delta;
 
             let is_back = instance.position.z < Self::POS_WHEEL_BACK_LEFT.z - Self::RADIUS * 1.5f32;
@@ -145,8 +163,9 @@ impl ParticleSystem {
                 instance.position.y += delta * (-instance.position.z).sqrt();
             }
             if is_bottom || is_back {
-                instance.position.z -= delta * lifetime.0 * 8f32;
+                instance.position += *direction * delta * 8f32;
             }
+            instance.position.y = instance.position.y.max(-Self::RADIUS);
 
             let life_percent = (lifetime.0 / lifetime.1) * PI;
             let scale = life_percent.sin();
