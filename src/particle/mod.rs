@@ -13,6 +13,27 @@ use crate::{
     pass::phong::Locals,
 };
 
+pub struct Particle {
+    pub instance: Instance,
+
+    pub lifetime: (f32, f32),
+}
+
+impl Particle {
+    fn to_raw(&self) -> InstanceRaw {
+        self.instance.to_raw()
+    }
+}
+
+impl From<Instance> for Particle {
+    fn from(instance: Instance) -> Self {
+        Self {
+            instance,
+            lifetime: (0f32, rand::random::<f32>()),
+        }
+    }
+}
+
 pub struct ParticleSystem {
     // ID of parent Node
     pub parent: u32,
@@ -21,8 +42,7 @@ pub struct ParticleSystem {
     // The vertex buffers and texture data
     pub model: model::Model,
     // An array of positional data for each instance (can just pass 1 instance)
-    pub instances: Vec<Instance>,
-    pub lifetimes: Vec<(f32, f32)>,
+    pub instances: Vec<Particle>,
     pub instance_buffer: wgpu::Buffer,
 }
 
@@ -100,8 +120,7 @@ impl ParticleSystem {
             parent: node.parent,
             locals: node.locals,
             model: node.model,
-            instances: node.instances,
-            lifetimes: vec![(1f32, 1f32); instance_raw.len()],
+            instances: node.instances.into_iter().map(Particle::from).collect(),
             instance_buffer,
         }
     }
@@ -109,20 +128,24 @@ impl ParticleSystem {
     pub fn update(&mut self, delta: Duration, queue: &wgpu::Queue) {
         let delta = delta.as_secs_f32();
 
-        for (instance, lifetime) in self.instances.iter_mut().zip(self.lifetimes.iter_mut()) {
-            lifetime.0 += delta;
+        for particle in self.instances.iter_mut() {
+            let lifetime = particle.lifetime;
+
             if lifetime.0 > lifetime.1 {
-                let new_lifetime = rand::random::<f32>() * 2f32 + 0.5f32;
-                *lifetime = (0f32, new_lifetime);
-                *instance = Self::new_particle();
+                *particle = Self::new_particle().into();
             }
 
-            if instance.position.y < -Self::RADIUS / 2f32 {
-                let speed = ((-instance.position.y / 0.6f32 + 0.5f32) * 2f32).powf(2f32) * 0.25f32;
-                #[cfg(debug_assertions)]
-                assert!(speed >= 0f32 && speed <= 1f32);
+            let Particle { instance, lifetime } = particle;
+            lifetime.0 += delta;
 
-                instance.position.z -= delta * speed * 2f32;
+            let is_back = instance.position.z < Self::POS_WHEEL_BACK_LEFT.z - Self::RADIUS * 1.5f32;
+            let is_bottom = instance.position.y < -Self::RADIUS / 2f32;
+
+            if is_back {
+                instance.position.y += delta * (-instance.position.z).sqrt();
+            }
+            if is_bottom || is_back {
+                instance.position.z -= delta * lifetime.0 * 8f32;
             }
 
             let life_percent = (lifetime.0 / lifetime.1) * PI;
@@ -138,7 +161,7 @@ impl ParticleSystem {
         let instance_raw = &self
             .instances
             .iter()
-            .map(Instance::to_raw)
+            .map(Particle::to_raw)
             .collect::<Vec<_>>();
 
         queue.write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(instance_raw));

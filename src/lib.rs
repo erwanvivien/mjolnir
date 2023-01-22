@@ -175,8 +175,8 @@ impl State {
         // Put all our nodes into an Vector to loop over later
         let nodes = vec![ferris_node, car_node];
 
-        let instances = (0..100)
-            .map(|i| ParticleSystem::new_particle())
+        let instances = (0..500)
+            .map(|_| ParticleSystem::new_particle())
             .collect::<Vec<_>>();
 
         let particle_node = Node {
