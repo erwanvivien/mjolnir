@@ -174,18 +174,41 @@ impl State {
         let light_model =
             PrimitiveMesh::new(&ctx.device, &ctx.queue, &sphere_vertices, &sphere_indices).await;
 
-        // Create a particle system
-        let particle_system = vec![ParticleSystem::new(
-            &ctx.device,
-            light_model.model,
-            Locals {
+        let instances = (0..100)
+            .map(|i| {
+                let position = cgmath::Vector3 {
+                    x: i as f32,
+                    y: 0f32,
+                    z: 0f32,
+                };
+                let scale = cgmath::Vector3::new(0.5f32, 0.5f32, 0.5f32);
+                let rotation = cgmath::Quaternion::from_axis_angle(
+                    cgmath::Vector3::unit_x(),
+                    cgmath::Deg(0f32),
+                );
+
+                Instance {
+                    position,
+                    rotation,
+                    scale,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let particle_node = Node {
+            parent: 0,
+            locals: Locals {
                 position: [0f32; 4],
                 color: [0f32; 4], // Color is not used yet
                 normal: [0f32; 4],
                 lights: [0f32; 4],
             },
-            100,
-        )];
+            model: light_model.model,
+            instances,
+        };
+
+        // Create a particle system
+        let particle_system = vec![ParticleSystem::new(&ctx.device, particle_node)];
 
         // Clear color used for mouse input interaction
         let time = Instant::now();

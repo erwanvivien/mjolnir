@@ -1,18 +1,24 @@
 use instant::Duration;
 
-use std::sync::atomic::AtomicU32;
+use std::{fmt::format, sync::atomic::AtomicU32};
 
-use crate::{instance::Instance, model, pass::phong::Locals};
+use crate::{
+    instance::{Instance, InstanceRaw},
+    model,
+    node::Node,
+    pass::phong::Locals,
+};
 
 pub struct ParticleSystem {
+    // ID of parent Node
+    pub parent: u32,
     // Local position of model (for relative calculations)
     pub locals: Locals,
     // The vertex buffers and texture data
     pub model: model::Model,
     // An array of positional data for each instance (can just pass 1 instance)
-    pub particle_data: Vec<Particle>,
-
-    buffer: wgpu::Buffer,
+    pub instances: Vec<Instance>,
+    pub instance_buffer: wgpu::Buffer,
 }
 
 #[repr(C)]
@@ -41,49 +47,50 @@ impl Default for Particle {
 const PARTICLE_SYSTEM_ID: AtomicU32 = AtomicU32::new(0);
 
 impl ParticleSystem {
-    pub fn new(device: &wgpu::Device, model: model::Model, locals: Locals, count: u32) -> Self {
+    pub fn new(device: &wgpu::Device, node: Node) -> Self {
         use wgpu::util::DeviceExt;
 
-        let particle_data = (0..count)
-            .map(|i| Particle {
-                position: [i as f32; 3],
-                lifetime: 2f32,
-                ..Default::default()
-            })
+        let instance_raw = &node
+            .instances
+            .iter()
+            .map(Instance::to_raw)
             .collect::<Vec<_>>();
 
-        #[cfg(debug_assertions)]
-        let label = &format!(
-            "Particle Instance Buffer {}",
-            PARTICLE_SYSTEM_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
-        );
-        #[cfg(not(debug_assertions))]
-        let label = "Particle Instance Buffer";
-
-        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(label),
-            contents: bytemuck::cast_slice(&particle_data),
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            #[cfg(debug_assertions)]
+            label: Some(&format!(
+                "Particle System {}",
+                PARTICLE_SYSTEM_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            )),
+            #[cfg(not(debug_assertions))]
+            label: None,
+            contents: bytemuck::cast_slice(instance_raw),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
         Self {
-            locals,
-            model,
-            particle_data,
-            buffer,
+            parent: node.parent,
+            locals: node.locals,
+            model: node.model,
+            instances: node.instances,
+            instance_buffer,
         }
     }
 
     pub fn update(&mut self, delta: Duration, queue: &wgpu::Queue) {
-        for particle in &mut self.particle_data {
-            particle.lifetime = match particle.lifetime {
-                life if life < -5f32 => 2f32,
-                life => life - delta.as_millis() as f32,
-            };
+        let delta = delta.as_secs_f32();
+        for instance in &mut self.instances {
+            instance.scale[0] = (instance.scale[0] + delta).rem_euclid(5f32);
+            instance.scale[1] = (instance.scale[1] + delta).rem_euclid(5f32);
+            instance.scale[2] = (instance.scale[2] + delta).rem_euclid(5f32);
         }
 
-        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&self.particle_data));
-    }
+        let instance_raw = &self
+            .instances
+            .iter()
+            .map(Instance::to_raw)
+            .collect::<Vec<_>>();
 
-    fn draw(&mut self, encoder: &mut wgpu::CommandEncoder, target: &wgpu::TextureView) {}
+        queue.write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(instance_raw));
+    }
 }

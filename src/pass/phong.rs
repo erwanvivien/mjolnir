@@ -395,8 +395,9 @@ fn render_pass(
     });
 
     // Allocate buffers for local uniforms
-    if phong_pass.uniform_pool.buffers.len() < nodes.len() {
-        phong_pass.uniform_pool.alloc_buffers(nodes.len(), device);
+    let total_buffers = nodes.len() + particle_system.len();
+    if phong_pass.uniform_pool.buffers.len() < total_buffers {
+        phong_pass.uniform_pool.alloc_buffers(total_buffers, device);
     }
 
     // Loop over the nodes/models in a scene and setup the specific models
@@ -413,10 +414,10 @@ fn render_pass(
             .local_bind_groups
             .entry(model_index)
             .or_insert_with(|| {
+                #[cfg(debug_assertions)]
+                log::debug!("Creating local bind group for model: {}", model_index);
                 (0..node.model.materials.len())
                     .map(|mesh_index| {
-                        #[cfg(debug_assertions)]
-                        log::debug!("Creating local bind group for model: {}", model_index);
                         #[cfg(debug_assertions)]
                         log::debug!("Material {}/{}", mesh_index, node.model.materials.len());
                         device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -464,6 +465,46 @@ fn render_pass(
             });
     }
 
+    for (model_index, particle) in particle_system.iter().enumerate() {
+        let model_index = model_index + nodes.len();
+        let local_buffer = &phong_pass.uniform_pool.buffers[model_index];
+
+        // We create a bind group for each model's local uniform data
+        // and store it in a hash map to look up later
+        phong_pass
+            .local_bind_groups
+            .entry(model_index)
+            .or_insert_with(|| {
+                log::debug!(
+                    "Creating local bind group for particle: {}",
+                    model_index - nodes.len()
+                );
+                (0..particle.model.materials.len())
+                    .map(|mesh_index| {
+                        #[cfg(debug_assertions)]
+                        #[cfg(debug_assertions)]
+                        log::debug!("Material {}/{}", mesh_index, particle.model.materials.len());
+                        device.create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("[Phong] Locals"),
+                            layout: &phong_pass.local_bind_group_layout,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: local_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::TextureView(
+                                        &particle.model.materials[mesh_index].diffuse_texture.view,
+                                    ),
+                                },
+                            ],
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            });
+    }
+
     if let Some(light_model) = &phong_pass.light_model {
         // Setup lighting pipeline
         render_pass.set_pipeline(&phong_pass.light_render_pipeline);
@@ -475,6 +516,35 @@ fn render_pass(
                 .local_bind_groups
                 .get(&0)
                 .expect("No local bind group found for lighting")[0],
+        );
+    }
+
+    // Setup particle pipeline
+    render_pass.set_pipeline(&phong_pass.render_pipeline);
+    render_pass.set_bind_group(0, &phong_pass.global_bind_group, &[]);
+    for (model_index, particle) in particle_system.iter().enumerate() {
+        let model_index = model_index + nodes.len();
+
+        // Set the instance buffer unique to the model
+        render_pass.set_vertex_buffer(1, particle.instance_buffer.slice(..));
+
+        let model_bind_group = phong_pass.local_bind_groups[&model_index]
+            .iter()
+            .map(|bind_group| bind_group)
+            .collect::<Vec<_>>();
+
+        #[cfg(debug_assertions)]
+        log::debug!(
+            "[PAR_SYS] Drawing particle_system#{} with {} materials",
+            0,
+            model_bind_group.len()
+        );
+
+        // Draw the model
+        render_pass.draw_model_instanced(
+            &particle.model,
+            0..particle.instances.len() as u32,
+            &model_bind_group,
         );
     }
 
@@ -495,7 +565,7 @@ fn render_pass(
 
         #[cfg(debug_assertions)]
         log::debug!(
-            "Drawing model#{} with {} materials",
+            "[NODE] Drawing model#{} with {} materials",
             model_index,
             &model_bind_group.len()
         );
