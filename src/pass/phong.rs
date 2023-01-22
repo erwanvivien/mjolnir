@@ -530,7 +530,6 @@ fn render_pass(
 
         let model_bind_group = phong_pass.local_bind_groups[&model_index]
             .iter()
-            .map(|bind_group| bind_group)
             .collect::<Vec<_>>();
 
         #[cfg(debug_assertions)]
@@ -560,7 +559,6 @@ fn render_pass(
 
         let model_bind_group = phong_pass.local_bind_groups[&model_index]
             .iter()
-            .map(|bind_group| bind_group)
             .collect::<Vec<_>>();
 
         #[cfg(debug_assertions)]

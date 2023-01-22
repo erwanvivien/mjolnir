@@ -2,10 +2,9 @@ use cgmath::{Rotation3, Vector3};
 use instant::Duration;
 use rand_distr::{Distribution, Poisson};
 
-use std::{
-    f32::consts::{FRAC_1_PI, FRAC_PI_2, PI},
-    sync::atomic::AtomicU32,
-};
+use std::f32::consts::PI;
+#[cfg(debug_assertions)]
+use std::sync::atomic::AtomicU32;
 
 use crate::{
     instance::{Instance, InstanceRaw},
@@ -63,11 +62,11 @@ pub struct ParticleSystem {
 }
 
 #[cfg(debug_assertions)]
+#[allow(clippy::declare_interior_mutable_const)]
 const PARTICLE_SYSTEM_ID: AtomicU32 = AtomicU32::new(0);
 
 impl ParticleSystem {
     const RADIUS: f32 = 0.3f32;
-    const DIAMETER: f32 = Self::RADIUS * 2f32;
 
     const POS_WHEEL_BACK_LEFT: Vector3<f32> = cgmath::Vector3 {
         x: 0.66f32,
@@ -80,7 +79,7 @@ impl ParticleSystem {
     };
 
     pub fn new_instance(ty: &ParticleType) -> Instance {
-        let mut center = if rand::random::<bool>() {
+        let center = if rand::random::<bool>() {
             Self::POS_WHEEL_BACK_LEFT
         } else {
             Self::POS_WHEEL_BACK_RIGHT
@@ -156,6 +155,7 @@ impl ParticleSystem {
             .map(Instance::to_raw)
             .collect::<Vec<_>>();
 
+        #[allow(clippy::borrow_interior_mutable_const)]
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             #[cfg(debug_assertions)]
             label: Some(&format!(
@@ -180,7 +180,7 @@ impl ParticleSystem {
     pub fn update(&mut self, delta: Duration, queue: &wgpu::Queue) {
         let delta = delta.as_secs_f32();
 
-        for (i, particle) in self.instances.iter_mut().enumerate() {
+        for particle in self.instances.iter_mut() {
             let lifetime = particle.lifetime;
 
             if lifetime.0 > lifetime.1 {

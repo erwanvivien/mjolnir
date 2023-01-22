@@ -1,5 +1,6 @@
 use crate::model::ModelVertex;
 
+#[allow(dead_code)]
 pub fn cube_vertices(scale: f32) -> Vec<ModelVertex> {
     vec![
         // Front face
@@ -132,6 +133,7 @@ pub fn cube_vertices(scale: f32) -> Vec<ModelVertex> {
     ]
 }
 
+#[allow(dead_code)]
 pub fn cube_indices() -> Vec<u32> {
     vec![
         0, 1, 2, 0, 2, 3, // front

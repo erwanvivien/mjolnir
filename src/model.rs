@@ -98,7 +98,7 @@ pub trait DrawModel<'a> {
         &mut self,
         model: &'a Model,
         instances: Range<u32>,
-        local_bind_group: &Vec<&'a wgpu::BindGroup>,
+        local_bind_group: &[&'a wgpu::BindGroup],
     );
 }
 
@@ -129,19 +129,19 @@ where
     }
 
     fn draw_model(&mut self, model: &'b Model, local_bind_group: &'b wgpu::BindGroup) {
-        self.draw_model_instanced(model, 0..1, &vec![local_bind_group]);
+        self.draw_model_instanced(model, 0..1, &[local_bind_group]);
     }
 
     fn draw_model_instanced(
         &mut self,
         model: &'b Model,
         instances: Range<u32>,
-        local_bind_group: &Vec<&'b BindGroup>,
+        local_bind_group: &[&'b BindGroup],
     ) {
         for mesh in &model.meshes {
             let material = &model.materials[mesh.material];
             let material_bind_group = local_bind_group[mesh.material];
-            self.draw_mesh_instanced(mesh, material, instances.clone(), &material_bind_group);
+            self.draw_mesh_instanced(mesh, material, instances.clone(), material_bind_group);
         }
     }
 }
