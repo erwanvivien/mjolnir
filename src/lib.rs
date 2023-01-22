@@ -24,7 +24,7 @@ mod resources;
 mod texture;
 mod window;
 
-use crate::particle::{ParticleSystem, ParticleType};
+use crate::particle::ParticleSystem;
 use crate::primitives::plane;
 use crate::{
     camera::{Camera, CameraController},
@@ -204,10 +204,6 @@ impl State {
         // Put all our nodes into an Vector to loop over later
         let nodes = vec![ferris_node, car_node, plane_node];
 
-        let instances = (0..1000)
-            .map(|_| ParticleSystem::new_instance(&ParticleType::Default))
-            .collect::<Vec<_>>();
-
         let particle_node = Node {
             parent: 0,
             locals: Locals {
@@ -217,7 +213,7 @@ impl State {
                 lights: [0f32; 4],
             },
             model: particle_model,
-            instances,
+            instances: Vec::new(),
         };
 
         // Create a particle system

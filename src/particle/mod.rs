@@ -1,6 +1,6 @@
 use cgmath::{Rotation3, Vector3};
 use instant::Duration;
-use rand_distr::{Distribution, Poisson};
+use rand_distr::{Distribution, Poisson, WeightedIndex};
 
 use std::f32::consts::PI;
 #[cfg(debug_assertions)]
@@ -13,11 +13,10 @@ use crate::{
     pass::phong::Locals,
 };
 
+#[derive(Debug, Clone, Copy)]
 pub enum ParticleType {
     Movement(Vector3<f32>),
     Rotation((f32, Vector3<f32>)),
-
-    Default,
 }
 
 pub struct Particle {
@@ -67,6 +66,7 @@ const PARTICLE_SYSTEM_ID: AtomicU32 = AtomicU32::new(0);
 
 impl ParticleSystem {
     const RADIUS: f32 = 0.3f32;
+    const MAX_PARTICLES: usize = 800;
 
     const POS_WHEEL_BACK_LEFT: Vector3<f32> = cgmath::Vector3 {
         x: 0.66f32,
@@ -78,7 +78,36 @@ impl ParticleSystem {
         ..Self::POS_WHEEL_BACK_LEFT
     };
 
-    pub fn new_instance(ty: &ParticleType) -> Instance {
+    pub fn new_particle() -> Particle {
+        let direction = Vector3::new(
+            (rand::random::<f32>() * 2f32 - 1f32) * 0.2f32,
+            (rand::random::<f32>() * 2f32 - 1f32) * 0.2f32,
+            -1f32,
+        );
+        let choices = [{ ParticleType::Movement(direction) }, {
+            let poi = Poisson::new(45f32).unwrap();
+            let angle = -poi.sample(&mut rand::thread_rng()) / 90f32 * PI;
+
+            let center = if rand::random::<bool>() {
+                Self::POS_WHEEL_BACK_LEFT
+            } else {
+                Self::POS_WHEEL_BACK_RIGHT
+            };
+
+            ParticleType::Rotation((angle, center))
+        }];
+        let weights = [9, 1];
+        let dist = WeightedIndex::new(&weights).unwrap();
+        let mut rng = rand::thread_rng();
+
+        let ty_index = dist.sample(&mut rng);
+        let ty = choices[ty_index];
+
+        let lifetime_factor = match &ty {
+            ParticleType::Movement(_) => 0.8f32,
+            ParticleType::Rotation(_) => 2f32,
+        };
+
         let center = if rand::random::<bool>() {
             Self::POS_WHEEL_BACK_LEFT
         } else {
@@ -86,7 +115,6 @@ impl ParticleSystem {
         };
 
         let position = match ty {
-            ParticleType::Default => center,
             ParticleType::Movement(_) => cgmath::Vector3 {
                 y: center.y - Self::RADIUS + 0.05f32,
                 ..center
@@ -94,7 +122,7 @@ impl ParticleSystem {
             ParticleType::Rotation((angle, center)) => {
                 let (sin, cos) = angle.sin_cos();
                 cgmath::Vector3 {
-                    x: center.x,
+                    x: center.x - 0.05f32 * center.x.signum(),
                     y: center.y + Self::RADIUS * cos,
                     z: center.z + Self::RADIUS * sin,
                 }
@@ -110,42 +138,14 @@ impl ParticleSystem {
             * cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_y(), rand_angle())
             * cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), rand_angle());
 
-        Instance {
+        let instance = Instance {
             position,
             rotation,
             scale,
-        }
-    }
-
-    pub fn new_particle() -> Particle {
-        let ty = if rand::random::<f32>() < 0.9f32 {
-            let direction = Vector3::new(
-                (rand::random::<f32>() * 2f32 - 1f32) * 0.2f32,
-                (rand::random::<f32>() * 2f32 - 1f32) * 0.2f32,
-                -1f32,
-            );
-
-            ParticleType::Movement(direction)
-        } else {
-            let poi = Poisson::new(45f32).unwrap();
-            let angle = -poi.sample(&mut rand::thread_rng()) / 90f32 * PI;
-
-            let center = if rand::random::<bool>() {
-                Self::POS_WHEEL_BACK_LEFT
-            } else {
-                Self::POS_WHEEL_BACK_RIGHT
-            };
-
-            ParticleType::Rotation((angle, center))
         };
 
-        let lifetime_factor = match ty {
-            ParticleType::Movement(_) => 0.8f32,
-            ParticleType::Rotation(_) => 2f32,
-            ParticleType::Default => 1f32,
-        };
         Particle {
-            instance: Self::new_instance(&ty),
+            instance,
             lifetime: (0f32, rand::random::<f32>() * lifetime_factor),
             ty,
         }
@@ -154,11 +154,11 @@ impl ParticleSystem {
     pub fn new(device: &wgpu::Device, node: Node) -> Self {
         use wgpu::util::DeviceExt;
 
-        let instance_raw = &node
-            .instances
-            .iter()
-            .map(Instance::to_raw)
+        let instances = (0..Self::MAX_PARTICLES)
+            .map(|_| Self::new_particle())
             .collect::<Vec<_>>();
+
+        let instance_raw = &instances.iter().map(Particle::to_raw).collect::<Vec<_>>();
 
         #[allow(clippy::borrow_interior_mutable_const)]
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -177,7 +177,7 @@ impl ParticleSystem {
             parent: node.parent,
             locals: node.locals,
             model: node.model,
-            instances: node.instances.into_iter().map(Particle::from).collect(),
+            instances,
             instance_buffer,
         }
     }
@@ -187,7 +187,6 @@ impl ParticleSystem {
 
         for particle in self.instances.iter_mut() {
             let lifetime = particle.lifetime;
-
             if lifetime.0 > lifetime.1 {
                 *particle = Self::new_particle();
             }
@@ -197,7 +196,6 @@ impl ParticleSystem {
                 lifetime,
                 ty,
             } = particle;
-
             lifetime.0 += delta;
 
             match ty {
@@ -213,18 +211,21 @@ impl ParticleSystem {
                         instance.position += *direction * delta * 4f32;
                     }
                     instance.position.y = instance.position.y.max(-Self::RADIUS);
+
+                    // instance.position.z = 100f32;
                 }
                 ParticleType::Rotation((angle, center)) => {
-                    *angle += delta * 2f32;
+                    *angle += delta * 8f32; // * ((lifetime.1 - lifetime.0) / lifetime.1);
 
                     let (sin, cos) = angle.sin_cos();
                     instance.position = cgmath::Vector3 {
-                        x: instance.position.x + f32::signum(center.x) * delta * 0.1f32,
                         y: center.y + Self::RADIUS * cos,
                         z: center.z + Self::RADIUS * sin,
+                        ..*center
                     };
+
+                    // instance.position.z = 100f32;
                 }
-                ParticleType::Default => {}
             }
 
             let life_percent = (lifetime.0 / lifetime.1) * PI;
@@ -232,7 +233,6 @@ impl ParticleSystem {
             let scale_factor = match ty {
                 ParticleType::Movement(_) => 0.05f32,
                 ParticleType::Rotation(_) => 0.01f32,
-                ParticleType::Default => 0f32,
             };
             instance.scale = cgmath::Vector3::new(
                 scale * scale_factor + 0.01,
