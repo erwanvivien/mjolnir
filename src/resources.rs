@@ -469,11 +469,10 @@ pub async fn load_model_glb(
         let pbr = material.pbr_metallic_roughness();
         let texture_source = &pbr
             .base_color_texture()
-            .map(|tex| tex.texture().source().source())
-            .expect("texture");
+            .map(|tex| tex.texture().source().source());
 
         let diffuse_texture = match texture_source {
-            gltf::image::Source::View { view, .. } => {
+            Some(gltf::image::Source::View { view, .. }) => {
                 let start = view.offset();
                 let end = view.offset() + view.length();
                 let buffer = &buffer_data[view.buffer().index()][start..end];
@@ -491,8 +490,18 @@ pub async fn load_model_glb(
 
                 texture
             }
-            gltf::image::Source::Uri { uri, .. } => {
+            Some(gltf::image::Source::Uri { uri, .. }) => {
                 let uri = file_name.with_file_name(uri);
+                load_texture(&uri, device, queue).await?
+            }
+            None => {
+                log::info!(
+                    "No texture found for {}, using default texture",
+                    file_name.display()
+                );
+                let uri = std::path::Path::new(FILE)
+                    .join("assets")
+                    .join("default_texture.png");
                 load_texture(&uri, device, queue).await?
             }
         };

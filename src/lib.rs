@@ -98,6 +98,10 @@ impl State {
             .await
             .unwrap();
 
+        let particle_model = resources::load_model(Path::new("Nuage.glb"), &ctx.device, &ctx.queue)
+            .await
+            .unwrap();
+
         // Create instances for each object with locational data (position + rotation)
         // Renderer currently defaults to using instances. Want one object? Pass a Vec of 1 instance.
 
@@ -170,10 +174,6 @@ impl State {
         // Put all our nodes into an Vector to loop over later
         let nodes = vec![ferris_node, car_node];
 
-        let (sphere_vertices, sphere_indices) = generate_sphere(0.5f32, 36, 18);
-        let light_model =
-            PrimitiveMesh::new(&ctx.device, &ctx.queue, &sphere_vertices, &sphere_indices).await;
-
         let instances = (0..100)
             .map(|i| {
                 let position = cgmath::Vector3 {
@@ -203,7 +203,7 @@ impl State {
                 normal: [0f32; 4],
                 lights: [0f32; 4],
             },
-            model: light_model.model,
+            model: particle_model,
             instances,
         };
 
