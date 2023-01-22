@@ -269,7 +269,8 @@ pub async fn load_model_gltf(
 
     // Load materials
     let mut materials = Vec::new();
-    log::info!("Looping through materials");
+    #[cfg(debug_assertions)]
+    log::debug!("Looping through materials");
     for material in gltf.materials() {
         let pbr = material.pbr_metallic_roughness();
         let texture_source = &pbr
@@ -301,7 +302,8 @@ pub async fn load_model_gltf(
 
     for scene in gltf.scenes() {
         for node in scene.nodes() {
-            log::info!("Node {} {}", node.index(), node.name().unwrap_or("Unnamed"));
+            #[cfg(debug_assertions)]
+            log::debug!("Node {} {}", node.index(), node.name().unwrap_or("Unnamed"));
 
             let mesh = node.mesh().expect("Got mesh");
             let primitives = mesh.primitives();
@@ -454,9 +456,12 @@ pub async fn load_model_glb(
 
     // Load materials
     let mut materials = Vec::new();
-    log::info!("Looping through materials");
+
+    #[cfg(debug_assertions)]
+    log::debug!("Looping through materials");
     for material in gltf.materials() {
-        log::info!(
+        #[cfg(debug_assertions)]
+        log::debug!(
             r#"Material#{:?} "{}""#,
             material.index().map(|f| f as isize).unwrap_or(-1),
             material.name().unwrap_or("Unnamed")
@@ -500,7 +505,8 @@ pub async fn load_model_glb(
 
     let mut meshes = Vec::new();
     for mesh in gltf.meshes() {
-        log::info!(
+        #[cfg(debug_assertions)]
+        log::debug!(
             r#"Mesh#{} "{}""#,
             mesh.index(),
             mesh.name().unwrap_or("Unnamed")
