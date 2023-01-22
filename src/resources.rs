@@ -308,21 +308,25 @@ pub async fn load_model_gltf(
             primitives.for_each(|primitive| {
                 let reader = primitive.reader(|buffer| Some(&buffer_data[buffer.index()]));
 
-                log::info!("[START] Reading positions, normals, tex_coords");
+                #[cfg(debug_assertions)]
+                log::debug!("[START] Reading positions, normals, tex_coords");
                 let (positions, normals, tex_coords) = (
                     reader.read_positions().unwrap(),
                     reader.read_normals().unwrap(),
                     reader.read_tex_coords(0).unwrap().into_f32(),
                 );
-                log::info!("[END  ] Reading positions, normals, tex_coords");
+                #[cfg(debug_assertions)]
+                log::debug!("[END  ] Reading positions, normals, tex_coords");
 
-                log::info!("[START] Reading indices");
+                #[cfg(debug_assertions)]
+                log::debug!("[START] Reading indices");
                 let indices = reader.read_indices().map(|indices| indices.into_u32());
                 let indices = match indices {
                     Some(indices) => indices.collect::<Vec<_>>(),
                     None => (0..positions.len() as u32).collect(),
                 };
-                log::info!("[END  ] Reading indices");
+                #[cfg(debug_assertions)]
+                log::debug!("[END  ] Reading indices");
 
                 let vertices = positions
                     .zip(normals)
@@ -334,7 +338,8 @@ pub async fn load_model_gltf(
                     })
                     .collect::<Vec<_>>();
 
-                log::info!("[START] Creating buffers");
+                #[cfg(debug_assertions)]
+                log::debug!("[START] Creating buffers");
                 let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some(&format!("{:?} Vertex Buffer", file_name)),
                     contents: bytemuck::cast_slice(&vertices),
@@ -345,7 +350,8 @@ pub async fn load_model_gltf(
                     contents: bytemuck::cast_slice(&indices),
                     usage: wgpu::BufferUsages::INDEX,
                 });
-                log::info!("[END  ] Creating buffers");
+                #[cfg(debug_assertions)]
+                log::debug!("[END  ] Creating buffers");
 
                 meshes.push(model::Mesh {
                     name: file_name.display().to_string(),
@@ -504,21 +510,25 @@ pub async fn load_model_glb(
         primitives.for_each(|primitive| {
             let reader = primitive.reader(|buffer| Some(&buffer_data[buffer.index()]));
 
-            log::info!("[START] Reading positions, normals, tex_coords");
+            #[cfg(debug_assertions)]
+            log::debug!("[START] Reading positions, normals, tex_coords");
             let (positions, normals, tex_coords) = (
                 reader.read_positions().unwrap(),
                 reader.read_normals().unwrap(),
                 reader.read_tex_coords(0).unwrap().into_f32(),
             );
-            log::info!("[END  ] Reading positions, normals, tex_coords");
+            #[cfg(debug_assertions)]
+            log::debug!("[END  ] Reading positions, normals, tex_coords");
 
-            log::info!("[START] Reading indices");
+            #[cfg(debug_assertions)]
+            log::debug!("[START] Reading indices");
             let indices = reader.read_indices().map(|indices| indices.into_u32());
             let indices = match indices {
                 Some(indices) => indices.collect::<Vec<_>>(),
                 None => (0..positions.len() as u32).collect(),
             };
-            log::info!("[END  ] Reading indices");
+            #[cfg(debug_assertions)]
+            log::debug!("[END  ] Reading indices");
 
             let vertices = positions
                 .zip(normals)
@@ -530,7 +540,8 @@ pub async fn load_model_glb(
                 })
                 .collect::<Vec<_>>();
 
-            log::info!("[START] Creating buffers");
+            #[cfg(debug_assertions)]
+            log::debug!("[START] Creating buffers");
             let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some(&format!("{:?} Vertex Buffer", file_name)),
                 contents: bytemuck::cast_slice(&vertices),
@@ -541,7 +552,8 @@ pub async fn load_model_glb(
                 contents: bytemuck::cast_slice(&indices),
                 usage: wgpu::BufferUsages::INDEX,
             });
-            log::info!("[END  ] Creating buffers");
+            #[cfg(debug_assertions)]
+            log::debug!("[END  ] Creating buffers");
 
             meshes.push(model::Mesh {
                 name: file_name.display().to_string(),
