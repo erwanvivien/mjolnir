@@ -60,10 +60,13 @@ impl ParticleSystem {
         };
 
         // Generate random scale
-        let scale = rand::random::<f32>() * 0.015 + 0.01;
-        let scale = cgmath::Vector3::new(scale, scale, scale);
-        let rotation =
-            cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_x(), cgmath::Rad(angle));
+        let scale = cgmath::Vector3::new(0f32, 0f32, 0f32);
+        fn rand_angle() -> cgmath::Rad<f32> {
+            cgmath::Rad(rand::random::<f32>() * 2f32 * std::f32::consts::PI)
+        }
+        let rotation = cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_x(), rand_angle())
+            * cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_y(), rand_angle())
+            * cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), rand_angle());
 
         Instance {
             position,
@@ -119,7 +122,7 @@ impl ParticleSystem {
                 #[cfg(debug_assertions)]
                 assert!(speed >= 0f32 && speed <= 1f32);
 
-                instance.position.z -= delta * speed;
+                instance.position.z -= delta * speed * 2f32;
             }
 
             let life_percent = (lifetime.0 / lifetime.1) * PI;
