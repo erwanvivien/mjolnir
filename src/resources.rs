@@ -88,9 +88,9 @@ pub async fn load_model(
     queue: &wgpu::Queue,
 ) -> anyhow::Result<model::Model> {
     #[cfg(not(target_arch = "wasm32"))]
-    let file_name = std::path::Path::new(FILE).join("assets").join(file_name);
+    let file_name = Path::new(FILE).join("assets").join(file_name);
     #[cfg(target_arch = "wasm32")]
-    let file_name = std::path::Path::new("assets").join(file_name);
+    let file_name = Path::new("assets").join(file_name);
 
     log::info!("Loading model: {}", file_name.display());
     if file_name.extension() == Some("obj".as_ref()) {
@@ -499,9 +499,10 @@ pub async fn load_model_glb(
                     "No texture found for {}, using default texture",
                     file_name.display()
                 );
-                let uri = std::path::Path::new(FILE)
-                    .join("assets")
-                    .join("default_texture.png");
+                #[cfg(not(target_arch = "wasm32"))]
+                let uri = Path::new(FILE).join("assets").join("default_texture.png");
+                #[cfg(target_arch = "wasm32")]
+                let uri = Path::new("assets").join("default_texture.png");
                 load_texture(&uri, device, queue).await?
             }
         };
